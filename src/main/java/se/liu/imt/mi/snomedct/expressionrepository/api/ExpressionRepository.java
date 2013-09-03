@@ -5,6 +5,7 @@ package se.liu.imt.mi.snomedct.expressionrepository.api;
 
 import java.util.Collection;
 
+import se.liu.imt.mi.snomedct.expression.tools.ExpressionSyntaxError;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 

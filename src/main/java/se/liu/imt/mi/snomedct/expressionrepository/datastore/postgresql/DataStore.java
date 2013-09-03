@@ -830,4 +830,11 @@ public class DataStore implements
 		return result;
 	}
 
+	@Override
+	public String getExpression(ExpressionId id, Date time)
+			throws DataStoreException, NonExistingIdException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 }

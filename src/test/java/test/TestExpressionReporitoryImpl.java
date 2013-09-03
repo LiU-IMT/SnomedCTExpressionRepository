@@ -12,9 +12,9 @@ import org.apache.log4j.Logger;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import se.liu.imt.mi.snomedct.expression.tools.ExpressionSyntaxError;
 import se.liu.imt.mi.snomedct.expressionrepository.ExpressionRepositoryImpl;
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionRepository;
-import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionSyntaxError;
 import se.liu.imt.mi.snomedct.expressionrepository.api.NonExistingIdException;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStoreService;

@@ -98,6 +98,23 @@ public interface DataStore {
 	 */
 	ExpressionId getExpressionId(String expression, Date time)
 			throws DataStoreException;
+	
+	/**
+	 * Get a String representation of an expression from the data store given an expression id.
+	 * 
+	 * @param id
+	 *            The expression id to receive the String representation for.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return The String representation of the expression.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 * @throws NonExistingIdException
+	 *             Thrown if the expression id does not exist in the data store.
+	 */
+	String getExpression(ExpressionId id, Date time)
+			throws DataStoreException, NonExistingIdException;
 
 	/**
 	 * Get all descendants to a expression at a specific time.
