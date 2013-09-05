@@ -4,6 +4,8 @@
 package test;
 
 
+import static org.junit.Assert.*;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -14,6 +16,7 @@ import se.liu.imt.mi.snomedct.expressionrepository.ExpressionRepositoryImpl;
 import se.liu.imt.mi.snomedct.expressionrepository.MRCMImpl;
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionRepository;
 import se.liu.imt.mi.snomedct.expressionrepository.api.MRCM;
+import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 
 /**
  * @author daniel
@@ -43,8 +46,8 @@ public class TestMRCMImpl {
 	@Before
 	public void setUp() throws Exception {
 //		ExpressionRepositoryImpl repo = new ExpressionRepositoryImpl();
-//		mrcm = new MRCMImpl(repo);
-//		mrcm.loadMRCM("src/refset_MRCM_preview-20130327.txt");
+		mrcm = new MRCMImpl(null);
+		mrcm.loadMRCM("src/test/resources/refset_MRCM_preview-20130327.txt");
 	}
 
 	/**
@@ -55,8 +58,8 @@ public class TestMRCMImpl {
 	}
 
 	@Test
-	public final void test() {
-//		fail("Not yet implemented"); // TODO
+	public final void testValidate() throws Exception {
+		assertTrue(mrcm.validate(new ExpressionId(34000006L), new ExpressionId(363698007L), new ExpressionId(51289009L))); // Crohns disease:finding site=Digestive tract structure
 	}
 
 }
