@@ -28,7 +28,7 @@ public class DataStoreService extends DataStore {
 
 	private static final Logger log = Logger
 			.getLogger(ExpressionRepositoryImpl.class);
-	
+
 	/**
 	 * Utility to restore expression repository database back to a certain date
 	 */
@@ -37,13 +37,13 @@ public class DataStoreService extends DataStore {
 		// initialize configuration
 		Configuration config = null;
 		config = new XMLConfiguration("config.xml");
-		
+
 		String url = config.getString("database.url");
 		String username = config.getString("database.username");
 		String password = config.getString("database.password");
-		
+
 		String date = "2012-08-01";
-		
+
 		DataStoreService dss = new DataStoreService(url, username, password);
 		DateFormat formatter = new SimpleDateFormat("YY-MM-DD");
 		log.debug("Connected to database server");
@@ -151,7 +151,8 @@ public class DataStoreService extends DataStore {
 	 * #finalize()
 	 */
 	@Override
-	protected void finalize() throws Throwable {
+	public void finalize() throws Throwable {
 		super.finalize();
 	}
+
 }
