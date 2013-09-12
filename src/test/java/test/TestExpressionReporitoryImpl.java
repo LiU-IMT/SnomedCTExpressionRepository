@@ -5,10 +5,12 @@ import static org.junit.Assert.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
+import java.util.Date;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.log4j.Logger;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -26,15 +28,30 @@ public class TestExpressionReporitoryImpl {
 			.getLogger(ExpressionRepositoryImpl.class);
 
 	private static ExpressionRepository repo = null;
+	
+	private static Date date = null;
 
 	/**
-	 * Setup environment before any test, including resetting database to 2012-08-01
+	 * Setup environment before any test, including storing current time
 	 * and creating a <code>ExpressionRepository</code> instance.
 	 * 
 	 * @throws Exception
 	 */
 	@BeforeClass
 	public static void oneTimeSetUp() throws Exception {
+		date = new Date();
+		
+		repo = new ExpressionRepositoryImpl();
+
+	}
+	
+	/**
+	 * Tear down test including resetting the database to the state before the test.
+	 * 
+	 * @throws java.lang.Exception
+	 */
+	@AfterClass
+	public static void tearDownAfterClass() throws Exception {
 		Configuration config = null;
 		config = new XMLConfiguration("config.xml");
 
@@ -42,15 +59,9 @@ public class TestExpressionReporitoryImpl {
 		String username = config.getString("database.username");
 		String password = config.getString("database.password");
 
-		String date = "2012-08-01";
-
 		DataStoreService dss = new DataStoreService(url, username, password);
-		DateFormat formatter = new SimpleDateFormat("YY-MM-DD");
-		dss.restoreDataStore(formatter.parse(date));
-		log.debug("Restored to " + date);
-
-		repo = new ExpressionRepositoryImpl();
-
+		dss.restoreDataStore(date);
+		log.debug("Restored to " + (new SimpleDateFormat()).format(date));
 	}
 
 	@Test

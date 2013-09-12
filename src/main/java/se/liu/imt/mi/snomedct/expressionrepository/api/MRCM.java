@@ -14,6 +14,6 @@ import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 public interface MRCM {
 	
 	void loadMRCM(String fileName) throws IOException;
-	boolean validate(ExpressionId subject, ExpressionId relationship, ExpressionId object);
+	boolean validate(ExpressionId subject, ExpressionId relationship, ExpressionId object) throws ConceptModelException;
 
 }
