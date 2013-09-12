@@ -21,7 +21,7 @@ import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
  * An implementation of the <code>DataStore</code> interface for the PostgreSQL
  * database management system.
  * 
- * @author Mikael Nystrï¿½m, mikael.nystrom@liu.se
+ * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
 public class DataStore implements
@@ -147,6 +147,18 @@ public class DataStore implements
 	private final PreparedStatement getExpressionIdTimePs;
 
 	/**
+	 * A <code>PreparedStatement</code> that retrieve an expression given the
+	 * expression's id from the dbms.
+	 */
+	private final PreparedStatement getExpressionPs;
+
+	/**
+	 * A <code>PreparedStatement</code> that retrieve an expression given the
+	 * expression's id at a specific time from the dbms.
+	 */
+	private final PreparedStatement getExpressionTimePs;
+
+	/**
 	 * A <code>PreparedStatement</code> that retrieve an expression's
 	 * descendants at the current time from the dbms.
 	 */
@@ -190,15 +202,39 @@ public class DataStore implements
 
 	/**
 	 * A <code>PreparedStatement</code> that retrieve an expression's parents at
-	 * a specific time from the dbms.
+	 * the current time from the dbms.
 	 */
 	private final PreparedStatement getParentsTimePs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve all expressions from the
-	 * dbms.
+	 * A <code>PreparedStatement</code> that retrieve all expressions at a
+	 * specific time from the dbms.
 	 */
 	private final PreparedStatement getAllExpressionsPs;
+
+	/**
+	 * A <code>PreparedStatement</code> which checks if an concept or expression
+	 * id exists at the current time in the dbms.
+	 */
+	private final PreparedStatement isExistingIdPs;
+
+	/**
+	 * A <code>PreparedStatement</code> which checks if an concept or expression
+	 * id exists at a specific time in the dbms.
+	 */
+	private final PreparedStatement isExistingIdTimePs;
+
+	/**
+	 * A <code>PreparedStatement</code> which checks if an concept or expression
+	 * subsumes another concept or expression at the current time.
+	 */
+	private final PreparedStatement isSubsumingPs;
+
+	/**
+	 * A <code>PreparedStatement</code> which checks if an concept or expression
+	 * subsumes another concept or expression at a specific time.
+	 */
+	private final PreparedStatement isSubsumingTimePs;
 
 	// ----------
 
@@ -213,12 +249,6 @@ public class DataStore implements
 	 * in the dbms.
 	 */
 	private final PreparedStatement isExistingExpressionIdPs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept id exists in
-	 * the dbms.
-	 */
-	private final PreparedStatement isExistingConceptOrExpressionIdPs;
 
 	/**
 	 * A <code>PreparedStatement</code> that check if an expression's equivalent
@@ -246,7 +276,6 @@ public class DataStore implements
 	 *             Thrown if there is a problem with the dbms or the connection
 	 *             to the dbms.
 	 */
-	// "jdbc:postgresql://Thengel/snomedapp", "snomedappuser", "fil_1_Bunke"
 	public DataStore(final String url, final String userName,
 			final String password) throws DataStoreException {
 		super();
@@ -279,10 +308,10 @@ public class DataStore implements
 							+ "WHERE sourceid IN (SELECT equivalentid FROM conexp WHERE id = ?)) AS source, "
 							+ "(SELECT Count(*) > 0 AS set FROM transitiveclosure "
 							+ "WHERE destinationid IN (SELECT equivalentid FROM conexp WHERE id = ?)) AS destination;");
-			setEquivalentIdPs = 
-			        con.prepareStatement("UPDATE expressions SET equivalentid = "
-			        + "(SELECT Max(equivalentid) FROM conexp WHERE endtime IS NULL AND id = ?) "
-			        + "WHERE id = ?;");
+			setEquivalentIdPs = con
+					.prepareStatement("UPDATE expressions SET equivalentid = "
+							+ "(SELECT Max(equivalentid) FROM conexp WHERE endtime IS NULL AND id = ?) "
+							+ "WHERE id = ?;");
 			setParentsTableCreate = con
 					.prepareStatement("CREATE TEMPORARY TABLE parents "
 							+ "(id bigint NOT NULL, CONSTRAINT \"PK_parents\" PRIMARY KEY (id)) "
@@ -337,6 +366,11 @@ public class DataStore implements
 					.prepareStatement("SELECT id FROM expressions WHERE expression = ?;");
 			getExpressionIdTimePs = con
 					.prepareStatement("SELECT id FROM expressions WHERE expression = ? "
+							+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
+			getExpressionPs = con
+					.prepareStatement("SELECT expression FROM expressions WHERE id = ?;");
+			getExpressionTimePs = con
+					.prepareStatement("SELECT expression FROM expressions WHERE id = ? "
 							+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
 			getDescendantsPs = con
 					.prepareStatement("SELECT result.id "
@@ -404,8 +438,25 @@ public class DataStore implements
 					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM concepts WHERE id = ?;");
 			isExistingExpressionIdPs = con
 					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM expressions WHERE id = ?;");
-			isExistingConceptOrExpressionIdPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM conexp WHERE id = ?;");
+			isExistingIdPs = con
+					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM conexp WHERE id = ? AND endtime IS NULL;");
+			isExistingIdTimePs = con
+					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM conexp WHERE id = ? AND "
+							+ "starttime <= ? AND (? < endtime OR endtime IS NULL);");
+			isSubsumingPs = con
+					.prepareStatement("SELECT Count(*) >= 1 AS subsumes "
+							+ "FROM conexp AS source JOIN transitiveclosure ON source.equivalentid = transitiveclosure.sourceid "
+							+ "JOIN conexp AS destination ON transitiveclosure.destinationid= result.equivalentid "
+							+ "WHERE destination.id = ? AND source.id = ? AND "
+							+ "source.endtime IS NULL AND transitiveclosure.endtime IS NULL AND destination.endtime IS NULL;");
+			isSubsumingTimePs = con
+					.prepareStatement("SELECT Count(*) >= 1 AS subsumes "
+							+ "FROM conexp AS source JOIN transitiveclosure ON source.equivalentid = transitiveclosure.sourceid "
+							+ "JOIN conexp AS destination ON transitiveclosure.destinationid= result.equivalentid "
+							+ "WHERE destination.id = ? AND source.id = ? AND "
+							+ "source.starttime <= ? AND (? < source.endtime OR source.endtime IS NULL) AND "
+							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
+							+ "destination.starttime <= ? AND (? < destination.endtime OR destination.endtime IS NULL);");
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
@@ -417,7 +468,7 @@ public class DataStore implements
 	 * @see java.lang.Object#finalize()
 	 */
 	@Override
-	protected void finalize() throws Throwable {
+	public void finalize() throws Throwable {
 		// Close the database connection.
 		con.close();
 		super.finalize();
@@ -527,7 +578,7 @@ public class DataStore implements
 
 			// Check if the parents exists in the dbms.
 			for (ExpressionId parentId : parents) {
-				if (!isExistingConceptOrExpressionId(parentId)) {
+				if (!isExistingId(parentId, null)) {
 					throw new NonExistingIdException("The specified parent id "
 							+ parentId.getId()
 							+ " do not exists in the data store.");
@@ -536,7 +587,7 @@ public class DataStore implements
 
 			// Check if the children exists in the dbms.
 			for (ExpressionId childId : children) {
-				if (!isExistingConceptOrExpressionId(childId)) {
+				if (!isExistingId(childId, null)) {
 					throw new NonExistingIdException("The specified child id "
 							+ childId.getId()
 							+ " do not exists in the data store.");
@@ -635,6 +686,40 @@ public class DataStore implements
 	}
 
 	@Override
+	public String getExpression(ExpressionId id, Date time)
+			throws DataStoreException, NonExistingIdException {
+		// TODO Skriv enhetstester.
+		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
+				time.getTime()) : null);
+		final String result;
+		try {
+			// Check if the expression id exists in the dbms.
+			if (!isExistingExpressionId(id)) {
+				throw new NonExistingIdException("The expression id "
+						+ id.getId() + " do not exists in the data store.");
+			}
+			final ResultSet getExpressionRs;
+			// Look up expression when no time is given.
+			if (sqlTimestamp == null) {
+				getExpressionPs.setLong(1, id.getId());
+				getExpressionRs = getExpressionPs.executeQuery();
+			} else {
+				// Look up expression when a time is given.
+				getExpressionTimePs.setLong(1, id.getId());
+				getExpressionTimePs.setTimestamp(2, sqlTimestamp);
+				getExpressionTimePs.setTimestamp(3, sqlTimestamp);
+				getExpressionRs = getExpressionTimePs.executeQuery();
+			}
+			// Store the result in the variable.
+			getExpressionRs.next();
+			result = getExpressionRs.getString(1);
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
 	public HashSet<ExpressionId> getDescendants(ExpressionId id, Date time)
 			throws DataStoreException, NonExistingIdException {
 		return getRelative(getDescendantsPs, getDescendantsTimePs, id, time);
@@ -675,6 +760,67 @@ public class DataStore implements
 		return result;
 	}
 
+	@Override
+	public boolean isExistingId(ExpressionId id, Date time)
+			throws DataStoreException {
+		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
+				time.getTime()) : null);
+		final boolean result;
+		try {
+			final ResultSet isExistingIdRs;
+			// Look up if an id exists when no time is given.
+			if (sqlTimestamp == null) {
+				isExistingIdPs.setLong(1, id.getId());
+				isExistingIdRs = isExistingIdPs.executeQuery();
+			} else {
+				// Look up if an id exists when a time is given.
+				isExistingIdTimePs.setLong(1, id.getId());
+				isExistingIdTimePs.setTimestamp(2, sqlTimestamp);
+				isExistingIdTimePs.setTimestamp(3, sqlTimestamp);
+				isExistingIdRs = isExistingIdTimePs.executeQuery();
+			}
+			isExistingIdRs.next();
+			result = isExistingIdRs.getBoolean("exist");
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
+	public boolean isSubsuNotEquivalent(ExpressionId id1, ExpressionId id2,
+			Date time) throws DataStoreException {
+		// TODO Skriv enhetstester.
+		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
+				time.getTime()) : null);
+		final boolean result;
+		try {
+			final ResultSet isSubsumingRs;
+			// Look up if an id exists when no time is given.
+			if (sqlTimestamp == null) {
+				isSubsumingPs.setLong(1, id1.getId());
+				isSubsumingPs.setLong(2, id2.getId());
+				isSubsumingRs = isSubsumingPs.executeQuery();
+			} else {
+				// Look up if an id exists when a time is given.
+				isSubsumingTimePs.setLong(1, id1.getId());
+				isSubsumingTimePs.setLong(2, id2.getId());
+				isSubsumingTimePs.setTimestamp(3, sqlTimestamp);
+				isSubsumingTimePs.setTimestamp(4, sqlTimestamp);
+				isSubsumingTimePs.setTimestamp(5, sqlTimestamp);
+				isSubsumingTimePs.setTimestamp(6, sqlTimestamp);
+				isSubsumingTimePs.setTimestamp(7, sqlTimestamp);
+				isSubsumingTimePs.setTimestamp(8, sqlTimestamp);
+				isSubsumingRs = isSubsumingTimePs.executeQuery();
+			}
+			isSubsumingRs.next();
+			result = isSubsumingRs.getBoolean("exist");
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
 	/**
 	 * Check if a specified concept id exists in the dbms.
 	 * 
@@ -686,6 +832,7 @@ public class DataStore implements
 	 */
 	private boolean isExistingConceptId(final ExpressionId id)
 			throws SQLException {
+		// TODO Den här funktionen ska nog även ta argumentet "Date time".
 		isExistingConceptIdPs.setLong(1, id.getId());
 		final ResultSet rs = isExistingConceptIdPs.executeQuery();
 		rs.next();
@@ -703,25 +850,9 @@ public class DataStore implements
 	 */
 	private boolean isExistingExpressionId(final ExpressionId id)
 			throws SQLException {
+		// TODO Den här funktionen ska nog även ta argumentet "Date time".
 		isExistingExpressionIdPs.setLong(1, id.getId());
 		final ResultSet rs = isExistingExpressionIdPs.executeQuery();
-		rs.next();
-		return rs.getBoolean("exist");
-	}
-
-	/**
-	 * Check if a specified concept or expression id exists in the dbms.
-	 * 
-	 * @param id
-	 *            The specified concept or expression id.
-	 * @return If the concept or expression id exists in the dbms or not.
-	 * @throws SQLException
-	 *             Thrown if there is any problems with the dbms.
-	 */
-	private boolean isExistingConceptOrExpressionId(final ExpressionId id)
-			throws SQLException {
-		isExistingConceptOrExpressionIdPs.setLong(1, id.getId());
-		final ResultSet rs = isExistingConceptOrExpressionIdPs.executeQuery();
 		rs.next();
 		return rs.getBoolean("exist");
 	}
@@ -828,13 +959,6 @@ public class DataStore implements
 			throw new DataStoreException(e);
 		}
 		return result;
-	}
-
-	@Override
-	public String getExpression(ExpressionId id, Date time)
-			throws DataStoreException, NonExistingIdException {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 }

@@ -14,7 +14,7 @@ import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
  * The interface to the data store.
  * 
  * @author Daniel Karlsson, daniel.karlsson@liu.se
- * @author Mikael NystrÃ¶m, mikael.nystrom@liu.se
+ * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
 public interface DataStore {
@@ -59,6 +59,11 @@ public interface DataStore {
 			ExpressionId equivalentExpressionId) throws DataStoreException,
 			NonExistingIdException, RelativeAlreadySetException;
 
+	// TODO Den här funktionen ska även ta argumentet "Date time" och inte
+	// kasta RelativeAlreadySetException när ett uttrycks ekvivalens uppdateras
+	// på nytt. Däremot får den kasat ett annat exception när man försöker
+	// bakdatera en ekvivalens längre tillbaka än senast satta ekvivalensen.
+
 	/**
 	 * Store an expression's parents and children in the data store.
 	 * 
@@ -83,6 +88,13 @@ public interface DataStore {
 			throws DataStoreException, NonExistingIdException,
 			RelativeAlreadySetException;
 
+	// TODO Den här funktionen ska även ta argumentet "Date time" och inte
+	// kasta RelativeAlreadySetException när ett uttrycks ekvivalens uppdateras
+	// på nytt. Däremot får den kasat ett annat exception när man försöker
+	// bakdatera en ekvivalens längre tillbaka än senast satta ekvivalensen.
+
+	// TODO Lägg till en funktion som tar bort lagrad ekvivalens.
+
 	/**
 	 * Get an expression's id from the data store.
 	 * 
@@ -98,9 +110,10 @@ public interface DataStore {
 	 */
 	ExpressionId getExpressionId(String expression, Date time)
 			throws DataStoreException;
-	
+
 	/**
-	 * Get a String representation of an expression from the data store given an expression id.
+	 * Get a String representation of an expression from the data store given an
+	 * expression id.
 	 * 
 	 * @param id
 	 *            The expression id to receive the String representation for.
@@ -113,8 +126,8 @@ public interface DataStore {
 	 * @throws NonExistingIdException
 	 *             Thrown if the expression id does not exist in the data store.
 	 */
-	String getExpression(ExpressionId id, Date time)
-			throws DataStoreException, NonExistingIdException;
+	String getExpression(ExpressionId id, Date time) throws DataStoreException,
+			NonExistingIdException;
 
 	/**
 	 * Get all descendants to a expression at a specific time.
@@ -193,4 +206,42 @@ public interface DataStore {
 	 */
 	Set<Expression> getAllExpressions() throws DataStoreException;
 
+	// TODO Den här funktionen ska även ta argumentet "Date time".
+
+	/**
+	 * Check if an id exist as an id for a concept or expression in the data
+	 * store at a specific time.
+	 * 
+	 * @param id
+	 *            The id to check the existence for.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return If the id exists or not in the data store.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	boolean isExistingId(ExpressionId id, Date time) throws DataStoreException;
+
+	/**
+	 * Check if the concept or expression with id1 is subsuming an the concept
+	 * or expression with id2 at a specific time.
+	 * 
+	 * @param id1
+	 *            The id1 of the concept or expression.
+	 * @param id2
+	 *            The id2 of the concept or expression.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return if the concept or expression with id1 is subsuming an the concept
+	 *         or expression with id2.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	boolean isSubsuNotEquivalent(ExpressionId id1, ExpressionId id2, Date time)
+			throws DataStoreException;
+
+	// TODO Lägg till isEquivalent(ExpressionId id1, ExpressionId id2, Date
+	// time) också.
 }

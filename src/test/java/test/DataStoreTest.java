@@ -1,7 +1,7 @@
 /**
  * 
  */
-package se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql;
+package test;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -18,6 +18,8 @@ import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.commons.configuration.Configuration;
+import org.apache.commons.configuration.XMLConfiguration;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -28,6 +30,8 @@ import se.liu.imt.mi.snomedct.expressionrepository.api.RelativeAlreadySetExcepti
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionAlreadyExistsException;
 import se.liu.imt.mi.snomedct.expressionrepository.api.NonExistingIdException;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
+import se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore;
+import se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStoreService;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.Expression;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 
@@ -36,10 +40,23 @@ import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
  * JUnit test for class
  * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore}
  * 
- * @author Mikael Nystrï¿½m, mikael.nystrom@liu.se
+ * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
 public class DataStoreTest {
+
+	/**
+	 * A <code>String</code> with the url to the database.
+	 */
+	private static String url = null;
+	/**
+	 * A <code>String</code> with the user name to the database.
+	 */
+	private static String username = null;
+	/**
+	 * A <code>String</code> with the password to the database.
+	 */
+	private static String password = null;
 
 	/**
 	 * A <code>Connection</code> to use for preparation before and clean up
@@ -71,11 +88,18 @@ public class DataStoreTest {
 		// Store the timestamp the execution started.
 		startTime = new Date();
 
+		// Fetch the database connection details.
+		Configuration config = null;
+		config = new XMLConfiguration("config.xml");
+		url = config.getString("database.url");
+		username = config.getString("database.username");
+		password = config.getString("database.password");
+
 		// Set up a database connection for the test methods to use for
 		// preparation before and clean up after the tests.
 		Class.forName("org.postgresql.Driver");
-		con = DriverManager.getConnection("jdbc:postgresql://localhost/termbind",
-				"termbinduser", "fil_i_Bunke|");
+		con = DriverManager.getConnection(url, username, password);
+
 		stmt = con.createStatement();
 	}
 
@@ -85,10 +109,9 @@ public class DataStoreTest {
 	 */
 	@AfterClass
 	public static void tearDownAfterClass() throws Exception {
+		// Fetch the databas connection details.
 		// Clean up the database.
-		DataStoreService ds = new DataStoreService(
-				"jdbc:postgresql://localhost/termbind", "termbinduser",
-				"fil_i_Bunke|");
+		DataStoreService ds = new DataStoreService(url, username, password);
 		ds.restoreDataStore(startTime);
 	}
 
@@ -98,8 +121,8 @@ public class DataStoreTest {
 	 */
 	@Before
 	public void setUp() throws Exception {
-		ds = new DataStore("jdbc:postgresql://localhost/termbind",
-				"termbinduser", "fil_i_Bunke|");
+		// Fetch the databas connection details.
+		ds = new DataStore(url, username, password);
 	}
 
 	/**
@@ -162,7 +185,7 @@ public class DataStoreTest {
 			throw new AssertionError(e);
 		}
 		assertTrue("The stored id for the expression " + expressionWithoutDate
-				+ "without date is incorrect in the database.",
+				+ " without date is incorrect in the database.",
 				expressionWithoutDateId.equals(expressionWithoutDateIdTested));
 
 		try {
@@ -605,12 +628,9 @@ public class DataStoreTest {
 	public final void testGetChildrenWithoutDate() {
 		final ExpressionId conceptAcuteAllergicReaction = new ExpressionId(
 				(long) 241929008);
-		final ExpressionId conceptAnaphylactoidReaction = new ExpressionId(
-				(long) 35001004);
 		final ExpressionId conceptAnaphylaxis = new ExpressionId(
 				(long) 39579001);
 		final Set<ExpressionId> conceptChildrenNow = new HashSet<ExpressionId>();
-		conceptChildrenNow.add(conceptAnaphylactoidReaction);
 		conceptChildrenNow.add(conceptAnaphylaxis);
 		final Set<ExpressionId> conceptChildrenTestedNow;
 		try {
@@ -823,6 +843,170 @@ public class DataStoreTest {
 
 		assertTrue("The stored and retrieved expressions are not the same.",
 				expressions.equals(expressionsTested));
+	}
+
+	/**
+	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#isExistingId(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testIsExistingIdWithoutDate() {
+		final String expressionString2 = "80";
+		final ExpressionId expressionId1 = new ExpressionId((long) 138875005);
+		final ExpressionId expressionId2;
+		final ExpressionId expressionId3;
+		final boolean expressionId1ExistsTested;
+		final boolean expressionId2ExistsTested;
+		final boolean expressionId3ExistsTested;
+
+		try {
+			ds.storeExpression(expressionString2, null);
+			expressionId2 = ds.getExpressionId(expressionString2, null);
+		} catch (DataStoreException | ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			final ResultSet expressionsRs = stmt
+					.executeQuery("SELECT MIN(id) - 1 FROM expressions");
+			expressionsRs.next();
+			expressionId3 = new ExpressionId(expressionsRs.getLong(1));
+		} catch (SQLException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			expressionId1ExistsTested = ds.isExistingId(expressionId1, null);
+			expressionId2ExistsTested = ds.isExistingId(expressionId2, null);
+			expressionId3ExistsTested = ds.isExistingId(expressionId3, null);
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		}
+
+		assertTrue(
+				"The method says that the concept 138875005 | SNOMED CT Concept | doesn't exist in the data store at the current time, but it is the root concept in SNOMED CT.",
+				expressionId1ExistsTested == true);
+
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId2.toString()
+						+ " doesn't exist in the data store at the current time , but it is stored there.",
+				expressionId2ExistsTested == true);
+
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId3.toString()
+						+ " exist in the data store at the current time , but it is not stored there.",
+				expressionId3ExistsTested == false);
+	}
+
+	/**
+	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#isExistingId(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testIsExistingIdWithDate() {
+		// TODO Implement.
+
+		final String expressionString2 = "90";
+		final ExpressionId expressionId1 = new ExpressionId((long) 138875005);
+		final ExpressionId expressionId2;
+		final ExpressionId expressionId3;
+		final Date insertTimeBefore = new GregorianCalendar(2109, 02, 23, 03,
+				01, 22).getTime();
+		final Date insertTime = new GregorianCalendar(2111, 03, 04, 23, 15, 21)
+				.getTime();
+		final Date insertTimeAfter = new GregorianCalendar(2112, 02, 11, 12,
+				03, 14).getTime();
+		final boolean expressionId1ExistsTestedBefore;
+		final boolean expressionId1ExistsTestedNow;
+		final boolean expressionId1ExistsTestedAfter;
+		final boolean expressionId2ExistsTestedBefore;
+		final boolean expressionId2ExistsTestedNow;
+		final boolean expressionId2ExistsTestedAfter;
+		final boolean expressionId3ExistsTestedBefore;
+		final boolean expressionId3ExistsTestedNow;
+		final boolean expressionId3ExistsTestedAfter;
+
+		try {
+			ds.storeExpression(expressionString2, insertTime);
+			expressionId2 = ds.getExpressionId(expressionString2, null);
+		} catch (DataStoreException | ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			final ResultSet expressionsRs = stmt
+					.executeQuery("SELECT MIN(id) - 1 FROM expressions");
+			expressionsRs.next();
+			expressionId3 = new ExpressionId(expressionsRs.getLong(1));
+		} catch (SQLException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			expressionId1ExistsTestedBefore = ds.isExistingId(expressionId1,
+					insertTimeBefore);
+			expressionId1ExistsTestedNow = ds.isExistingId(expressionId1, null);
+			expressionId1ExistsTestedAfter = ds.isExistingId(expressionId1,
+					insertTimeAfter);
+			expressionId2ExistsTestedBefore = ds.isExistingId(expressionId2,
+					insertTimeBefore);
+			expressionId2ExistsTestedNow = ds.isExistingId(expressionId2, null);
+			expressionId2ExistsTestedAfter = ds.isExistingId(expressionId2,
+					insertTimeAfter);
+			expressionId3ExistsTestedBefore = ds.isExistingId(expressionId3,
+					insertTimeBefore);
+			expressionId3ExistsTestedNow = ds.isExistingId(expressionId3, null);
+			expressionId3ExistsTestedAfter = ds.isExistingId(expressionId3,
+					insertTimeAfter);
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		}
+
+		assertTrue(
+				"The method says that the concept 138875005 | SNOMED CT Concept | doesn't exist in the data store at 2009-02-23, but it is the root concept in SNOMED CT.",
+				expressionId1ExistsTestedBefore == true);
+		assertTrue(
+				"The method says that the concept 138875005 | SNOMED CT Concept | doesn't exist in the data store at 2111-03-04, but it is the root concept in SNOMED CT.",
+				expressionId1ExistsTestedNow == true);
+		assertTrue(
+				"The method says that the concept 138875005 | SNOMED CT Concept | doesn't exist in the data store at 2012-02-11, but it is the root concept in SNOMED CT.",
+				expressionId1ExistsTestedAfter == true);
+
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId2.toString()
+						+ " does exist in the data store at 2109-02-23, but it is not stored there yet .",
+				expressionId2ExistsTestedBefore == false);
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId2.toString()
+						+ " doesn't exist in the data store at 2111-03-04, but it is stored there.",
+				expressionId2ExistsTestedNow == true);
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId2.toString()
+						+ " doesn't exist in the data store at 2112-02-11, but it is stored there.",
+				expressionId2ExistsTestedAfter == true);
+
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId3.toString()
+						+ " exist in the data store at 2109-02-23, but it is not stored there.",
+				expressionId3ExistsTestedBefore == false);
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId3.toString()
+						+ " exist in the data store at 2111-03-04, but it is not stored there.",
+				expressionId3ExistsTestedNow == false);
+		assertTrue(
+				"The method says that the expression with id "
+						+ expressionId3.toString()
+						+ " exist in the data store at 2112-02-11, but it is not stored there.",
+				expressionId3ExistsTestedAfter == false);
 	}
 
 	/**
