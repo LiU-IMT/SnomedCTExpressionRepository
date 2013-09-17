@@ -4,6 +4,7 @@
 package se.liu.imt.mi.snomedct.expressionrepository.api;
 
 import java.util.Collection;
+import java.util.Date;
 
 import se.liu.imt.mi.snomedct.expression.tools.ExpressionSyntaxError;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
@@ -63,7 +64,7 @@ public interface ExpressionRepository {
 	 * @throws NonExistingIdException
 	 *             The id does not exist in the repository.
 	 * @throws DataStoreException
-	 * @throws Exception 
+	 * @throws Exception
 	 */
 	Collection<ExpressionId> getSCTQueryResult(String queryExpression)
 			throws ExpressionSyntaxError, NonExistingIdException,
@@ -132,5 +133,18 @@ public interface ExpressionRepository {
 	 */
 	Collection<ExpressionId> getParents(ExpressionId id)
 			throws NonExistingIdException, DataStoreException;
+
+	/**
+	 * Checks subsumption between two <code>ExpressionId</code> objects
+	 * 
+	 * @param id1
+	 *            An <code>ExpressionId</code> object
+	 * @param id2
+	 *            An <code>ExpressionId</code> object
+	 * @return true iff id1 is subsumed by id2
+	 * @throws DataStoreException
+	 */
+	boolean isSubsumedNotEquivalent(ExpressionId id1, ExpressionId id2,
+			Date time) throws DataStoreException;
 
 }
