@@ -21,18 +21,25 @@ import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
  * An implementation of the <code>DataStore</code> interface for the PostgreSQL
  * database management system including service methods.
  * 
- * @author Mikael Nystrï¿½m, mikael.nystrom@liu.se
+ * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
 public class DataStoreService extends DataStore {
 
+	/**
+	 * Logger
+	 */
 	private static final Logger log = Logger
 			.getLogger(ExpressionRepositoryImpl.class);
 
 	/**
 	 * Utility to restore expression repository database back to a certain date
+	 * 
+	 * @param args
+	 *            The arguments are never used.
+	 * @throws Exception
+	 *             If something goes wrong.
 	 */
-	@SuppressWarnings("deprecation")
 	public static void main(String[] args) throws Exception {
 		// initialize configuration
 		Configuration config = null;

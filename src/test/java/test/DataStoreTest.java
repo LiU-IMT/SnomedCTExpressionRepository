@@ -530,6 +530,88 @@ public class DataStoreTest {
 
 	/**
 	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getExpression(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testGetExpressionWithoutDate() {
+		final String expressionWithoutDate = "100";
+		final ExpressionId expressionWithoutDateId;
+		final String expressionWithoutDateTested;
+
+		try {
+			expressionWithoutDateId = ds.storeExpression(expressionWithoutDate,
+					null);
+		} catch (DataStoreException | ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			expressionWithoutDateTested = ds.getExpression(
+					expressionWithoutDateId, null);
+		} catch (DataStoreException | NonExistingIdException e) {
+			throw new AssertionError(e);
+		}
+
+		assertTrue("The stored expression " + expressionWithoutDate
+				+ "and the returned expression " + expressionWithoutDateTested
+				+ "at the current time is not the same.",
+				expressionWithoutDate.equals(expressionWithoutDateTested));
+	}
+
+	/**
+	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getExpression(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testGetExpressionWithDate() {
+		final String expressionWithDate = "110";
+		final ExpressionId expressionWithDateId;
+		@SuppressWarnings("unused")
+		final String expressionWithDateTestedBefore;
+		final String expressionWithDateTestedAfter;
+
+		final Date insertTimeBefore = new GregorianCalendar(2107, 03, 12, 02,
+				56, 21).getTime();
+		final Date insertTime = new GregorianCalendar(2109, 03, 24, 07, 16, 12)
+				.getTime();
+		final Date insertTimeAfter = new GregorianCalendar(2113, 04, 10, 12,
+				44, 24).getTime();
+
+		try {
+			expressionWithDateId = ds.storeExpression(expressionWithDate,
+					insertTime);
+		} catch (DataStoreException | ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			expressionWithDateTestedBefore = ds.getExpression(
+					expressionWithDateId, insertTimeBefore);
+			fail("A NonExistingIdException should be thrown when asking for a expression at a time before the expression was insterded.");
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		} catch (NonExistingIdException e1) {
+			// Everything is correct.
+		}
+
+		try {
+			expressionWithDateTestedAfter = ds.getExpression(
+					expressionWithDateId, insertTimeAfter);
+		} catch (DataStoreException | NonExistingIdException e) {
+			throw new AssertionError(e);
+		}
+
+		assertTrue("The stored expression " + expressionWithDate
+				+ "and the returned expression "
+				+ expressionWithDateTestedAfter + "at " + insertTimeAfter
+				+ "is not the same.",
+				expressionWithDate.equals(expressionWithDateTestedAfter));
+	}
+
+	/**
+	 * Test method for
 	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getDescendants(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
 	 * .
 	 */
@@ -847,6 +929,303 @@ public class DataStoreTest {
 
 	/**
 	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#isSubsumingNotEquivalent(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testIsSubsumingNotEquivalentWithoutDate() {
+		final ExpressionId conceptBodyStructure = new ExpressionId(
+				(long) 123037004);
+		final ExpressionId conceptProcedure = new ExpressionId((long) 71388002);
+		final ExpressionId conceptProcedureByMethod = new ExpressionId(
+				(long) 128927009);
+		final ExpressionId expressionEqualToBodyStructure;
+		final ExpressionId expressionEqualToProcedure;
+		final ExpressionId expressionEqualToProcedureByMethod;
+
+		try {
+			expressionEqualToBodyStructure = ds.storeExpression("123037004",
+					null);
+			ds.storeExpressionEquivalence(expressionEqualToBodyStructure,
+					conceptBodyStructure);
+			expressionEqualToProcedure = ds.storeExpression("71388002", null);
+			ds.storeExpressionEquivalence(expressionEqualToProcedure,
+					conceptProcedure);
+			expressionEqualToProcedureByMethod = ds.storeExpression(
+					"128927009", null);
+			ds.storeExpressionEquivalence(expressionEqualToProcedureByMethod,
+					conceptProcedureByMethod);
+		} catch (DataStoreException | NonExistingIdException
+				| RelativeAlreadySetException
+				| ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			assertTrue(
+					"The concept 71388002 | procedure | should subsume the concept 128927009 | procedure by method |.",
+					ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptProcedureByMethod, null));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept 71388002 | procedure |.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							conceptProcedure, null));
+			assertTrue(
+					"The concept 71388002 | procedure | should not subsume the concept  123037004 | body structure |.",
+					!ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptBodyStructure, null));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  71388002 | procedure |.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							conceptProcedure, null));
+			assertTrue(
+					"The concept 71388002 | procedure | should not be unequal to the concept 71388002 | procedure |.",
+					!ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptProcedure, null));
+
+			assertTrue(
+					"The expressionEqualToProcedure should subsume the concept expressionEqualToProcedureByMethod.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedureByMethod, null));
+			assertTrue(
+					"The expressionEqualToProcedureByMethod should not subsume the concept expressionEqualToProcedure.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToProcedureByMethod,
+							expressionEqualToProcedure, null));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept expressionEqualToBodyStructure.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToBodyStructure, null));
+			assertTrue(
+					"The concept expressionEqualToBodyStructure should not subsume the concept expressionEqualToProcedure.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToBodyStructure,
+							expressionEqualToProcedure, null));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not be unequal to the concept expressionEqualToProcedure.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedure, null));
+
+			assertTrue(
+					"The concept expressionEqualToProcedure should subsume the concept 128927009 | procedure by method |.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptProcedureByMethod, null));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept expressionEqualToProcedure.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							expressionEqualToProcedure, null));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept  123037004 | body structure |.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptBodyStructure, null));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  expressionEqualToProcedure.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							expressionEqualToProcedure, null));
+
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		}
+
+	}
+
+	/**
+	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#isSubsumingNotEquivalent(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testIsSubsumingNotEquivalentWithDate() {
+		// TODO Fixa.
+		final ExpressionId conceptBodyStructure = new ExpressionId(
+				(long) 123037004);
+		final ExpressionId conceptProcedure = new ExpressionId((long) 71388002);
+		final ExpressionId conceptProcedureByMethod = new ExpressionId(
+				(long) 128927009);
+		final ExpressionId expressionEqualToBodyStructure;
+		final ExpressionId expressionEqualToProcedure;
+		final ExpressionId expressionEqualToProcedureByMethod;
+
+		final Date insertTimeBefore = new GregorianCalendar(2102, 03, 04, 04,
+				41, 22).getTime();
+		final Date insertTime = new GregorianCalendar(2103, 04, 05, 05, 21, 25)
+				.getTime();
+		final Date insertTimeAfter = new GregorianCalendar(2105, 02, 01, 07,
+				22, 12).getTime();
+
+		try {
+			expressionEqualToBodyStructure = ds.storeExpression("0123037004",
+					insertTime);
+			ds.storeExpressionEquivalence(expressionEqualToBodyStructure,
+					conceptBodyStructure);
+			expressionEqualToProcedure = ds.storeExpression("071388002",
+					insertTime);
+			ds.storeExpressionEquivalence(expressionEqualToProcedure,
+					conceptProcedure);
+			expressionEqualToProcedureByMethod = ds.storeExpression(
+					"0128927009", insertTime);
+			ds.storeExpressionEquivalence(expressionEqualToProcedureByMethod,
+					conceptProcedureByMethod);
+		} catch (DataStoreException | NonExistingIdException
+				| RelativeAlreadySetException
+				| ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			assertTrue(
+					"The concept 71388002 | procedure | should subsume the concept 128927009 | procedure by method | at the time 2102-03-04 04:41:22.",
+					ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptProcedureByMethod, insertTimeBefore));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept 71388002 | procedure | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							conceptProcedure, insertTimeBefore));
+			assertTrue(
+					"The concept 71388002 | procedure | should not subsume the concept  123037004 | body structure | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptBodyStructure, insertTimeBefore));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  71388002 | procedure | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							conceptProcedure, insertTimeBefore));
+			assertTrue(
+					"The concept 71388002 | procedure | should not be unequal to the concept 71388002 | procedure | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptProcedure,
+							conceptProcedure, insertTimeBefore));
+
+			// Before insert time.
+			assertTrue(
+					"The expressionEqualToProcedure should not subsume the concept expressionEqualToProcedureByMethod at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedureByMethod,
+							insertTimeBefore));
+			assertTrue(
+					"The expressionEqualToProcedureByMethod should not subsume the concept expressionEqualToProcedure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToProcedureByMethod,
+							expressionEqualToProcedure, insertTimeBefore));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept expressionEqualToBodyStructure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToBodyStructure, insertTimeBefore));
+			assertTrue(
+					"The concept expressionEqualToBodyStructure should not subsume the concept expressionEqualToProcedure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToBodyStructure,
+							expressionEqualToProcedure, insertTimeBefore));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not be unequal to the concept expressionEqualToProcedure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedure, insertTimeBefore));
+
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept 128927009 | procedure by method | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptProcedureByMethod, insertTimeBefore));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept expressionEqualToProcedure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							expressionEqualToProcedure, insertTimeBefore));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept  123037004 | body structure | at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptBodyStructure, insertTimeBefore));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  expressionEqualToProcedure at the time 2102-03-04 04:41:22.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							expressionEqualToProcedure, insertTimeBefore));
+
+			// Insert time.
+			assertTrue(
+					"The expressionEqualToProcedure should subsume the concept expressionEqualToProcedureByMethod at the time 2103-04-05 05:21:25.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedureByMethod, insertTime));
+			assertTrue(
+					"The expressionEqualToProcedureByMethod should not subsume the concept expressionEqualToProcedure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToProcedureByMethod,
+							expressionEqualToProcedure, insertTime));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept expressionEqualToBodyStructure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToBodyStructure, insertTime));
+			assertTrue(
+					"The concept expressionEqualToBodyStructure should not subsume the concept expressionEqualToProcedure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToBodyStructure,
+							expressionEqualToProcedure, insertTime));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not be unequal to the concept expressionEqualToProcedure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedure, insertTime));
+
+			assertTrue(
+					"The concept expressionEqualToProcedure should subsume the concept 128927009 | procedure by method | at the time 2103-04-05 05:21:25.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptProcedureByMethod, insertTime));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept expressionEqualToProcedure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							expressionEqualToProcedure, insertTime));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept  123037004 | body structure | at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptBodyStructure, insertTime));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  expressionEqualToProcedure at the time 2103-04-05 05:21:25.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							expressionEqualToProcedure, insertTime));
+
+			// After insert time.
+			assertTrue(
+					"The expressionEqualToProcedure should subsume the concept expressionEqualToProcedureByMethod at the time 2105-02-01 07:22:12.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedureByMethod, insertTimeAfter));
+			assertTrue(
+					"The expressionEqualToProcedureByMethod should not subsume the concept expressionEqualToProcedure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToProcedureByMethod,
+							expressionEqualToProcedure, insertTimeAfter));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept expressionEqualToBodyStructure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToBodyStructure, insertTimeAfter));
+			assertTrue(
+					"The concept expressionEqualToBodyStructure should not subsume the concept expressionEqualToProcedure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(
+							expressionEqualToBodyStructure,
+							expressionEqualToProcedure, insertTimeAfter));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not be unequal to the concept expressionEqualToProcedure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							expressionEqualToProcedure, insertTimeAfter));
+
+			assertTrue(
+					"The concept expressionEqualToProcedure should subsume the concept 128927009 | procedure by method | at the time 2105-02-01 07:22:12.",
+					ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptProcedureByMethod, insertTimeAfter));
+			assertTrue(
+					"The concept 128927009 | procedure by method | should not subsume the concept expressionEqualToProcedure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(conceptProcedureByMethod,
+							expressionEqualToProcedure, insertTimeAfter));
+			assertTrue(
+					"The concept expressionEqualToProcedure should not subsume the concept  123037004 | body structure | at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(expressionEqualToProcedure,
+							conceptBodyStructure, insertTimeAfter));
+			assertTrue(
+					"The concept 123037004 | body structure | should not subsume the concept  expressionEqualToProcedure at the time 2105-02-01 07:22:12.",
+					!ds.isSubsumingNotEquivalent(conceptBodyStructure,
+							expressionEqualToProcedure, insertTimeAfter));
+
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		}
+
+	}
+
+	/**
+	 * Test method for
 	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#isExistingId(se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)}
 	 * .
 	 */
@@ -908,8 +1287,6 @@ public class DataStoreTest {
 	 */
 	@Test
 	public final void testIsExistingIdWithDate() {
-		// TODO Implement.
-
 		final String expressionString2 = "90";
 		final ExpressionId expressionId1 = new ExpressionId((long) 138875005);
 		final ExpressionId expressionId2;

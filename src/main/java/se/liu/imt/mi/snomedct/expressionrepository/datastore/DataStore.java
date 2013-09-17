@@ -209,21 +209,6 @@ public interface DataStore {
 	// TODO Den här funktionen ska även ta argumentet "Date time".
 
 	/**
-	 * Check if an id exist as an id for a concept or expression in the data
-	 * store at a specific time.
-	 * 
-	 * @param id
-	 *            The id to check the existence for.
-	 * @param time
-	 *            The specific time. A <code>null</code> value is handled as the
-	 *            current time.
-	 * @return If the id exists or not in the data store.
-	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.
-	 */
-	boolean isExistingId(ExpressionId id, Date time) throws DataStoreException;
-
-	/**
 	 * Check if the concept or expression with id1 is subsuming an the concept
 	 * or expression with id2 at a specific time.
 	 * 
@@ -239,9 +224,28 @@ public interface DataStore {
 	 * @throws DataStoreException
 	 *             Thrown if there are any problem with the data store.
 	 */
-	boolean isSubsuNotEquivalent(ExpressionId id1, ExpressionId id2, Date time)
-			throws DataStoreException;
+	boolean isSubsumingNotEquivalent(ExpressionId id1, ExpressionId id2,
+			Date time) throws DataStoreException;
 
 	// TODO Lägg till isEquivalent(ExpressionId id1, ExpressionId id2, Date
-	// time) också.
+	// time).
+
+	// TODO Lägg till isSubsumingOrEquivalent(ExpressionId id1, ExpressionId
+	// id2, Date time).
+
+	/**
+	 * Check if an id exist as an id for a concept or expression in the data
+	 * store at a specific time.
+	 * 
+	 * @param id
+	 *            The id to check the existence for.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return If the id exists or not in the data store.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	boolean isExistingId(ExpressionId id, Date time) throws DataStoreException;
+
 }
