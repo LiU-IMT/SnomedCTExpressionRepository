@@ -209,8 +209,8 @@ public interface DataStore {
 	// TODO Den här funktionen ska även ta argumentet "Date time".
 
 	/**
-	 * Check if the concept or expression with id1 is subsuming an the concept
-	 * or expression with id2 at a specific time.
+	 * Check if one concept or expression is subsuming but not is equivalent to
+	 * another concept or expression at a specific time.
 	 * 
 	 * @param id1
 	 *            The id1 of the concept or expression.
@@ -219,19 +219,51 @@ public interface DataStore {
 	 * @param time
 	 *            The specific time. A <code>null</code> value is handled as the
 	 *            current time.
-	 * @return if the concept or expression with id1 is subsuming an the concept
-	 *         or expression with id2.
+	 * @return if the concept or expression with id1 is subsuming but not is
+	 *         equivalent to the concept or expression with id2.
 	 * @throws DataStoreException
 	 *             Thrown if there are any problem with the data store.
 	 */
 	boolean isSubsumingNotEquivalent(ExpressionId id1, ExpressionId id2,
 			Date time) throws DataStoreException;
 
-	// TODO Lägg till isEquivalent(ExpressionId id1, ExpressionId id2, Date
-	// time).
+	/**
+	 * Check if one concept or expression is equivalent to another concept or
+	 * expression at a specific time.
+	 * 
+	 * @param id1
+	 *            The id1 of the concept or expression.
+	 * @param id2
+	 *            The id2 of the concept or expression.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return if the concept or expression with id1 is equivalent to the
+	 *         concept or expression with id2.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	boolean isEquivalent(ExpressionId id1, ExpressionId id2, Date time)
+			throws DataStoreException;
 
-	// TODO Lägg till isSubsumingOrEquivalent(ExpressionId id1, ExpressionId
-	// id2, Date time).
+	/**
+	 * Check if one concept or expression is subsuming another concept or
+	 * expression at a specific time.
+	 * 
+	 * @param id1
+	 *            The id1 of the concept or expression.
+	 * @param id2
+	 *            The id2 of the concept or expression.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
+	 * @return if the concept or expression with id1 is subsuming the concept or
+	 *         expression with id2.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	boolean isSubsuming(ExpressionId id1, ExpressionId id2, Date time)
+			throws DataStoreException;
 
 	/**
 	 * Check if an id exist as an id for a concept or expression in the data
