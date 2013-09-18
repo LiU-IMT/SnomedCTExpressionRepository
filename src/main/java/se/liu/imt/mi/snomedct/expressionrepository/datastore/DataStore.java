@@ -198,15 +198,16 @@ public interface DataStore {
 			throws DataStoreException, NonExistingIdException;
 
 	/**
-	 * Get all expressions in the data store.
+	 * Get all expressions in the data store at a specific time.
 	 * 
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the
+	 *            current time.
 	 * @return All expressions in the data store.
 	 * @throws DataStoreException
 	 *             Thrown if there are any problem with the data store.
 	 */
-	Set<Expression> getAllExpressions() throws DataStoreException;
-
-	// TODO Den här funktionen ska även ta argumentet "Date time".
+	Set<Expression> getAllExpressions(Date time) throws DataStoreException;
 
 	/**
 	 * Check if one concept or expression is subsuming but not is equivalent to

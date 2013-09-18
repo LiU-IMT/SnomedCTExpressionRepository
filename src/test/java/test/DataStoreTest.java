@@ -121,7 +121,7 @@ public class DataStoreTest {
 	 */
 	@Before
 	public void setUp() throws Exception {
-		// Fetch the databas connection details.
+		// Fetch the database connection details.
 		ds = new DataStore(url, username, password);
 	}
 
@@ -876,11 +876,11 @@ public class DataStoreTest {
 
 	/**
 	 * Test method for
-	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getAllExpressions()}
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getAllExpressions(java.util.Date)}
 	 * .
 	 */
 	@Test
-	public final void testGetAllExpressions() {
+	public final void testGetAllExpressionsWithoutDate() {
 		try {
 			DataStoreTest.tearDownAfterClass();
 		} catch (Exception e) {
@@ -918,7 +918,65 @@ public class DataStoreTest {
 		}
 
 		try {
-			expressionsTested = ds.getAllExpressions();
+			expressionsTested = ds.getAllExpressions(null);
+		} catch (DataStoreException e) {
+			throw new AssertionError(e);
+		}
+
+		assertTrue("The stored and retrieved expressions are not the same.",
+				expressions.equals(expressionsTested));
+	}
+
+	/**
+	 * Test method for
+	 * {@link se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore#getAllExpressions(java.util.Date)}
+	 * .
+	 */
+	@Test
+	public final void testGetAllExpressionsWithDate() {
+		try {
+			DataStoreTest.tearDownAfterClass();
+		} catch (Exception e) {
+			throw new AssertionError(e);
+		}
+
+		final Date insertTime1 = new GregorianCalendar(2101, 02, 21).getTime();
+		final Date insertTimeBetween = new GregorianCalendar(2103, 11, 10)
+				.getTime();
+		final Date insertTime2 = new GregorianCalendar(2106, 01, 12).getTime();
+
+		final String expressionString1 = "121";
+		final String expressionString2 = "122";
+		final String expressionString3 = "123";
+		final String expressionString4 = "124";
+		final String expressionString5 = "125";
+		final Set<Expression> expressions = new HashSet<Expression>();
+		final Set<Expression> expressionsTested;
+
+		try {
+			ds.storeExpression(expressionString1, insertTime1);
+			ds.storeExpression(expressionString2, insertTime1);
+			ds.storeExpression(expressionString3, insertTime1);
+			ds.storeExpression(expressionString4, insertTime2);
+			ds.storeExpression(expressionString5, insertTime2);
+		} catch (DataStoreException | ExpressionAlreadyExistsException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			final ResultSet expressionsRs = stmt
+					.executeQuery("SELECT id, expression FROM expressions WHERE starttime <= '2103-11-10' AND ('2103-11-10' < endtime OR endtime IS NULL);");
+			while (expressionsRs.next()) {
+				expressions.add(new Expression(new ExpressionId(expressionsRs
+						.getLong(1)), expressionsRs.getString(2)));
+			}
+
+		} catch (SQLException e) {
+			throw new AssertionError(e);
+		}
+
+		try {
+			expressionsTested = ds.getAllExpressions(insertTimeBetween);
 		} catch (DataStoreException e) {
 			throw new AssertionError(e);
 		}

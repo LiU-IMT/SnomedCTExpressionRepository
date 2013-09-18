@@ -207,10 +207,16 @@ public class DataStore implements
 	private final PreparedStatement getParentsTimePs;
 
 	/**
+	 * A <code>PreparedStatement</code> that retrieve all expressions from the
+	 * dbms.
+	 */
+	private final PreparedStatement getAllExpressionsPs;
+
+	/**
 	 * A <code>PreparedStatement</code> that retrieve all expressions at a
 	 * specific time from the dbms.
 	 */
-	private final PreparedStatement getAllExpressionsPs;
+	private final PreparedStatement getAllExpressionsTimePs;
 
 	/**
 	 * A <code>PreparedStatement</code> which checks if an concept or expression
@@ -473,7 +479,9 @@ public class DataStore implements
 							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
 							+ "result.starttime <= ? AND (? < result.endtime OR result.endtime IS NULL);");
 			getAllExpressionsPs = con
-					.prepareStatement("SELECT id, expression FROM expressions;");
+					.prepareStatement("SELECT id, expression FROM expressions WHERE endtime IS NULL;");
+			getAllExpressionsTimePs = con
+					.prepareStatement("SELECT id, expression FROM expressions WHERE starttime <= ? AND (? < endtime OR endtime IS NULL);");
 			isExistingConceptIdPs = con
 					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM concepts WHERE id = ? AND endtime IS NULL;");
 			isExistingConceptIdTimePs = con
@@ -815,15 +823,26 @@ public class DataStore implements
 	}
 
 	@Override
-	public HashSet<Expression> getAllExpressions() throws DataStoreException {
+	public Set<Expression> getAllExpressions(Date time)
+			throws DataStoreException {
+		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
+				time.getTime()) : null);
 		final HashSet<Expression> result = new HashSet<Expression>();
 		try {
 			// Look up all expressions.
-			final ResultSet rs = getAllExpressionsPs.executeQuery();
+			final ResultSet getAllExpressionsRs;
+			if (time == null) {
+				getAllExpressionsRs = getAllExpressionsPs.executeQuery();
+			} else {
+				getAllExpressionsTimePs.setTimestamp(1, sqlTimestamp);
+				getAllExpressionsTimePs.setTimestamp(2, sqlTimestamp);
+				getAllExpressionsRs = getAllExpressionsTimePs.executeQuery();
+			}
+
 			// Store the expression in the linked list.
-			while (rs.next()) {
-				result.add(new Expression(new ExpressionId(rs.getLong(1)), rs
-						.getString(2)));
+			while (getAllExpressionsRs.next()) {
+				result.add(new Expression(new ExpressionId(getAllExpressionsRs
+						.getLong(1)), getAllExpressionsRs.getString(2)));
 			}
 		} catch (SQLException e) {
 			throw new DataStoreException(e);

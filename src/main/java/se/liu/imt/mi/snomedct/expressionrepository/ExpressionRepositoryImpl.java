@@ -129,7 +129,7 @@ public class ExpressionRepositoryImpl extends Object implements
 		// add all existing expressions from expression table to ontology
 		try {
 			log.debug("Adding existing expressions from data store to ontology");
-			Collection<Expression> expressions = dataStore.getAllExpressions();
+			Collection<Expression> expressions = dataStore.getAllExpressions(null);
 			for (Expression ex : expressions) {
 				Tree result = SnomedCTParser
 						.parseExpression(ex.getExpression());
