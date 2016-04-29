@@ -5,22 +5,22 @@ package se.liu.imt.mi.snomedct.expressionrepository.api;
 
 /**
  * 
- * @author Mikael Nystrï¿½m, mikael.nystrom@liu.se
+ * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
-public class RelativeAlreadySetException extends Exception {
+public class ExpressionAlreadyDefined extends Exception {
 
 	/**
 	 * 
 	 */
-	public RelativeAlreadySetException() {
+	public ExpressionAlreadyDefined() {
 		// TODO Auto-generated constructor stub
 	}
 
 	/**
 	 * @param message
 	 */
-	public RelativeAlreadySetException(String message) {
+	public ExpressionAlreadyDefined(String message) {
 		super(message);
 		// TODO Auto-generated constructor stub
 	}
@@ -28,7 +28,7 @@ public class RelativeAlreadySetException extends Exception {
 	/**
 	 * @param cause
 	 */
-	public RelativeAlreadySetException(Throwable cause) {
+	public ExpressionAlreadyDefined(Throwable cause) {
 		super(cause);
 		// TODO Auto-generated constructor stub
 	}
@@ -37,7 +37,7 @@ public class RelativeAlreadySetException extends Exception {
 	 * @param message
 	 * @param cause
 	 */
-	public RelativeAlreadySetException(String message, Throwable cause) {
+	public ExpressionAlreadyDefined(String message, Throwable cause) {
 		super(message, cause);
 		// TODO Auto-generated constructor stub
 	}
@@ -48,8 +48,8 @@ public class RelativeAlreadySetException extends Exception {
 	 * @param enableSuppression
 	 * @param writableStackTrace
 	 */
-	public RelativeAlreadySetException(String message, Throwable cause,
-			boolean enableSuppression, boolean writableStackTrace) {
+	public ExpressionAlreadyDefined(String message, Throwable cause, boolean enableSuppression,
+			boolean writableStackTrace) {
 		super(message, cause);
 		// TODO Auto-generated constructor stub
 	}
