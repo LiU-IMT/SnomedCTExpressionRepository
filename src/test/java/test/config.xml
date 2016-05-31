@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<database>
+		<url>jdbc:postgresql://127.0.0.1/exprep</url>
+		<username>exprepuser</username>
+		<password>fil_i_Bunke|</password>
+	</database>
+	<owlapi>
+		<url>file:///home/daniel/snomed.owl</url>
+	</owlapi>
+</configuration>

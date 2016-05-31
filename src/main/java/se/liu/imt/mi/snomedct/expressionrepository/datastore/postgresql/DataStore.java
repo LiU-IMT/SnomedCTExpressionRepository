@@ -10,7 +10,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
-import se.liu.imt.mi.snomedct.expressionrepository.api.RelativeAlreadySetException;
+import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionAlreadyDefined;
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionAlreadyExistsException;
 import se.liu.imt.mi.snomedct.expressionrepository.api.NonExistingIdException;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
@@ -18,299 +18,242 @@ import se.liu.imt.mi.snomedct.expressionrepository.datatypes.Expression;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 
 /**
- * An implementation of the <code>DataStore</code> interface for the PostgreSQL
- * database management system.
+ * An implementation of the <code>DataStore</code> interface for the PostgreSQL database management system.
  * 
  * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
  */
-public class DataStore implements
-		se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore {
+public class DataStore implements se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore {
 
 	/**
-	 * The connection to the PostgreSQL database management system, dbms,
-	 * containing the expression database.
+	 * The connection to the PostgreSQL database management system, dbms, containing the expression database.
 	 */
 	protected Connection con;
 
 	/**
-	 * A <code>PreparedStatement</code> that store an a expression without
-	 * normal form with the current timestamp in the dbms.
+	 * A <code>PreparedStatement</code> which checks if an expression already exists in the dbms.
 	 */
-	private final PreparedStatement storeExpressionPs;
+	private final PreparedStatement isExistingExpressionPs;
+	/**
+	 * A <code>PreparedStatement</code> that store an a expression with a timestamp in the dbms.
+	 */
+	private final PreparedStatement setExpressionPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that store an a expression at with a
-	 * specified timestamp in the dbms.
+	 * A <code>PreparedStatement</code> that store the id in an equivalent expression group if there is no suitable
+	 * equivalent expression group already existing in the dbms.
 	 */
-	private final PreparedStatement storeExpressionTimePs;
-
+	private final PreparedStatement setEquivalentIdGroupPs;
 	/**
-	 * A <code>PreparedStatement</code> that set an expression's equivalent id
-	 * to the expressions own id in the dbms.
-	 */
-	private final PreparedStatement setEquivalentIdToIdPs;
-
-	/**
-	 * A <code>PreparedStatement</code> that store an expression's equivalent
-	 * concept or expression id in the dbms. The stored equivalent id is always
-	 * the same for an equivalent group.
+	 * A <code>PreparedStatement</code> that store the id in the equivalent expression group in the dbms.
 	 */
 	private final PreparedStatement setEquivalentIdPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that create a temporary table for the
-	 * parents' id.
+	 * A <code>PreparedStatement</code> that create a temporary table for the parent(s) to the concept or expression.
 	 */
-	private final PreparedStatement setParentsTableCreate;
+	private final PreparedStatement storeRelativesCreateTableParentsPs;
+	/**
+	 * A <code>PreparedStatement</code> that create a temporary table for the child(ren) to the concept or expression.
+	 */
+	private final PreparedStatement storeRelativesCreateTableChildrenPs;
+	/**
+	 * A <code>PreparedStatement</code> that store the parent(s) to the to the concept or expression in the temporary
+	 * table.
+	 */
+	private final PreparedStatement storeRelativesInsertIntoTableParentsPs;
+	/**
+	 * A <code>PreparedStatement</code> that store the child(ren) to the to the concept or expression in the temporary
+	 * table.
+	 */
+	private final PreparedStatement storeRelativesInsertIntoTableChildrenPs;
+	/**
+	 * A <code>PreparedStatement</code> that analyze the temporary table for the parent(s) to the concept or expression.
+	 */
+	private final PreparedStatement storeRelativesAnalyzeTableParentsPs;
+	/**
+	 * A <code>PreparedStatement</code> that analyze the temporary table for the child(ren) to the concept or
+	 * expression.
+	 */
+	private final PreparedStatement storeRelativesAnalyzeTableChildrenPs;
+	/**
+	 * A <code>PreparedStatement</code> that extend the endtime for the parent relationship(s) for the concept or
+	 * expression that has it's parent(s) set.
+	 */
+	private final PreparedStatement storeRelativesParentsExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the parent relationship(s) for the concept or expression that has
+	 * it's parent(s) set.
+	 */
+	private final PreparedStatement storeRelativesParentsInsertPs;
+	/**
+	 * A <code>PreparedStatement</code> that extend the endtime for the child relationship(s) for the concept or
+	 * expression that has it's child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesChildrenExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the child relationship(s) for the concept expression that has it's
+	 * child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesChildrenInsertPs;
+	/**
+	 * A <code>PreparedStatement</code> that extend the endtime for the relevant ancestors for the expression that has
+	 * it's parent(s) set.
+	 */
+	private final PreparedStatement storeRelativesAncestorsExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the relevant ancestors for the expression that has it's parent(s)
+	 * set.
+	 */
+	private final PreparedStatement storeRelativesAncestorsInsertPs;
+	/**
+	 * A <code>PreparedStatement</code> that extend the endtime for the relevant descendants for the expression that has
+	 * it's child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesDescendantsExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the relevant links between the descendants for the expression that
+	 * has it's child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesDescendantsInsertPs;
+	/**
+	 * A <code>PreparedStatement</code> that extend the endtime for the relevant links between the parents and the
+	 * children for the expression that has it's parent(s) and child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesLinkParentsAndChildrenExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the relevant links between the parents and the children for the
+	 * expression that has it's parent(s) and child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesLinkParentsAndChildrenInsertPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that create a temporary table for the
-	 * children's id.
+	 * A <code>PreparedStatement</code> that extend the endtime for the relevant links between the ancestors and the
+	 * descendants for the expression that has it's parent(s) and child(ren) set.
 	 */
-	private final PreparedStatement setChildrenTableCreate;
+	private final PreparedStatement storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that insert the relevant links between the ancestors and the descendants for the
+	 * expression that has it's parent(s) and child(ren) set.
+	 */
+	private final PreparedStatement storeRelativesLinkAncestorsAndDescendantsInsertPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that insert the parents id in the
-	 * temporary table.
-	 */
-	private final PreparedStatement setParentsTableInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that insert the children id in the
-	 * temporary table.
-	 */
-	private final PreparedStatement setChildrenTableInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that analyze the temporary table for the
-	 * parents' id.
-	 */
-	private final PreparedStatement setParentsTableAnalyze;
-
-	/**
-	 * A <code>PreparedStatement</code> that analyze the temporary table for the
-	 * children's id.
-	 */
-	private final PreparedStatement setChildrenTableAnalyze;
-
-	/**
-	 * A <code>PreparedStatement</code> that inserts the parents into the
-	 * transitive closure table.
-	 */
-	private final PreparedStatement setParentsTransitiveclosureParentsInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that inserts the children into the
-	 * transitive closure table.
-	 */
-	private final PreparedStatement setChildrenTransitiveclosureChildrenInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that inserts the ancestors into the
-	 * transitive closure table.
-	 */
-	private final PreparedStatement setParentsTransitiveclosureAncestorsInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that inserts the descendants into the
-	 * transitive closure table.
-	 */
-	private final PreparedStatement setChildrenTransitiveclosureDescendantsInsert;
-
-	/**
-	 * A <code>PreparedStatement</code> that store the current direct
-	 * relationships as indirect relationships that are out of date due to a
-	 * insert of a new expression in the dbms.
-	 * 
-	 */
-	private final PreparedStatement convertDirectToIndirectRelationshipCreatePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retire the current direct
-	 * relationships that are out of date due to a insert of a new expression in
-	 * the dbms.
-	 * 
-	 */
-	private final PreparedStatement convertDirectToIndirectRelationshipRetirePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's id given
-	 * the expression itself from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression's id given the expression itself at a specific time
+	 * from the dbms.
 	 */
 	private final PreparedStatement getExpressionIdPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's id given
-	 * the expression itself at a specific time from the dbms.
-	 */
-	private final PreparedStatement getExpressionIdTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression given the
-	 * expression's id from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression given the expression's id at a specific time from
+	 * the dbms.
 	 */
 	private final PreparedStatement getExpressionPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression given the
-	 * expression's id at a specific time from the dbms.
-	 */
-	private final PreparedStatement getExpressionTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's
-	 * descendants at the current time from the dbms.
-	 */
-	private final PreparedStatement getDescendantsPs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's
-	 * descendants at a specific time from the dbms.
-	 */
-	private final PreparedStatement getDescendantsTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's children
-	 * at the current time from the dbms.
-	 */
-	private final PreparedStatement getChildrenPs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's children
-	 * at a specific time from the dbms.
-	 */
-	private final PreparedStatement getChildrenTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's ancestors
-	 * at the current time from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression's ancestors at a specific time from the dbms.
 	 */
 	private final PreparedStatement getAncestorsPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's ancestors
-	 * at a specific time from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression's descendants at a specific time from the dbms.
 	 */
-	private final PreparedStatement getAncestorsTimePs;
+	private final PreparedStatement getDescendantsPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's parents at
-	 * the current time from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression's parents at a specific time from the dbms.
 	 */
 	private final PreparedStatement getParentsPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve an expression's parents at
-	 * the current time from the dbms.
+	 * A <code>PreparedStatement</code> that retrieve an expression's children at a specific time from the dbms.
 	 */
-	private final PreparedStatement getParentsTimePs;
+	private final PreparedStatement getChildrenPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve all expressions from the
-	 * dbms.
+	 * A <code>PreparedStatement</code> that retrieve all expressions at a specific time from the dbms.
 	 */
 	private final PreparedStatement getAllExpressionsPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that retrieve all expressions at a
-	 * specific time from the dbms.
-	 */
-	private final PreparedStatement getAllExpressionsTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * id exists at the current time in the dbms.
-	 */
-	private final PreparedStatement isExistingIdPs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * id exists at a specific time in the dbms.
-	 */
-	private final PreparedStatement isExistingIdTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept id exists in
-	 * the dbms.
-	 */
-	private final PreparedStatement isExistingConceptIdPs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept id exists at
-	 * a specific time in the dbms.
-	 */
-	private final PreparedStatement isExistingConceptIdTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an expression id exists
-	 * in the dbms.
-	 */
-	private final PreparedStatement isExistingExpressionIdPs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an expression id exists
-	 * at a specific time in the dbms.
-	 */
-	private final PreparedStatement isExistingExpressionIdTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * subsumes but is not equivalent to another concept or expression at the
-	 * current time.
+	 * A <code>PreparedStatement</code> which checks if an concept or expression subsumes but is not equivalent to
+	 * another concept or expression at a specific time.
 	 */
 	private final PreparedStatement isSubsumingNotEquivalentPs;
 
 	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * subsumes but is not equivalent to another concept or expression at a
-	 * specific time.
-	 */
-	private final PreparedStatement isSubsumingNotEquivalentTimePs;
-
-	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * is equivalent to another concept or expression at the current time.
+	 * A <code>PreparedStatement</code> which checks if an concept or expression is equivalent to another concept or
+	 * expression at a specific time.
 	 */
 	private final PreparedStatement isEquivalentPs;
 
 	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * is equivalent to another concept or expression at a specific time.
+	 * A <code>PreparedStatement</code> which checks if an concept or expression id exists at the current time in the
+	 * dbms.
 	 */
-	private final PreparedStatement isEquivalentTimePs;
+	private final PreparedStatement isExistingIdPs;
 
 	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * subsumes another concept or expression at the current time.
+	 * A <code>PreparedStatement</code> which checks if an expression id exists in the dbms.
 	 */
-	@SuppressWarnings("unused")
-	private final PreparedStatement isSubsumingPs;
+	private final PreparedStatement isExistingExpressionIdPs;
 
 	/**
-	 * A <code>PreparedStatement</code> which checks if an concept or expression
-	 * subsumes another concept or expression at a specific time.
+	 * A <code>PreparedStatement</code> that check if an equivalence with a future start already has been set for the
+	 * expression in the dbms.
 	 */
-	@SuppressWarnings("unused")
-	private final PreparedStatement isSubsumingTimePs;
-
-	// ----------
+	private final PreparedStatement isFutureEquivalentSetPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that check if an expression's equivalent
-	 * concept or expression id is set in the dbms.
+	 * A <code>PreparedStatement</code> that check if parent(s) and/or child(ren) with a future start already has been
+	 * set for the expression in the dbms.
 	 */
-	private final PreparedStatement iSEquivalentIdSetPs;
+	private final PreparedStatement isFutureRelativeSetPs;
 
 	/**
-	 * A <code>PreparedStatement</code> that check if an expression has any
-	 * relatives set in the dbms.
+	 * A <code>PreparedStatement</code> that create new relationships for the concepts in an equivalence group if the
+	 * current relationships for the concepts with the relationships in the group is going to be inactivated.
 	 */
-	private final PreparedStatement isRelativeSetPs;
+	private final PreparedStatement inactivateRelativesCreateNewRelationshipsForEquivalencePs;
+	/**
+	 * A <code>PreparedStatement</code> that create new direct relationships between the parent(s) and child(ren) of the
+	 * concept which is going to be retired if no other concept from an equivalence group is used instead.
+	 */
+	private final PreparedStatement inactivateRelativesCreateNewDirectRelationshipsPs;
+	/**
+	 * A <code>PreparedStatement</code> that set the end time to the relationships that is going to be retired.
+	 */
+	private final PreparedStatement inactivateRelativesSetEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that delete relationships with the same starttime as the time the retirement is
+	 * done.
+	 */
+	private final PreparedStatement inactivateRelativesDeleteWithCurrentStartTimePs;
+	/**
+	 * A <code>PreparedStatement</code> that set the end time to the second last expression equivalence in the group.
+	 * The last expression will be inactivated by another statement, so there is no longer any use to include this
+	 * expression in the group.
+	 */
+	private final PreparedStatement inactivateEquivalenceGroupSetEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that delete the second last expression equivalence in the group. The last
+	 * expression will be inactivated by another statement, so there is no longer any use to include this expression in
+	 * the group.
+	 */
+	private final PreparedStatement inactivateEquivalenceGroupDeleteWithCurrentStartTimePs;
+	/**
+	 * A <code>PreparedStatement</code> that set the end time to the expression equivalence that is going to be retired.
+	 */
+	private final PreparedStatement inactivateEquivalenceSetEndtimePs;
+	/**
+	 * A <code>PreparedStatement</code> that delete the expression equivalence with the same starttime as the time the
+	 * retirement is done.
+	 */
+	private final PreparedStatement inactivateEquivalenceDeleteWithCurrentStartTimePs;
 
 	/**
-	 * Creates a data store API and set up a connection to the PostgreSQL
-	 * database management system containing the expression database.
+	 * Creates a data store API and set up a connection to the PostgreSQL database management system containing the
+	 * expression database.
 	 * 
 	 * @param url
 	 *            The URL for the database connection.
@@ -319,11 +262,9 @@ public class DataStore implements
 	 * @param password
 	 *            The user password for the database connection.
 	 * @throws DataStoreException
-	 *             Thrown if there is a problem with the dbms or the connection
-	 *             to the dbms.
+	 *             Thrown if there is a problem with the dbms or the connection to the dbms.
 	 */
-	public DataStore(final String url, final String userName,
-			final String password) throws DataStoreException {
+	public DataStore(final String url, final String userName, final String password) throws DataStoreException {
 		super();
 
 		// Set up the dbms connection.
@@ -338,207 +279,234 @@ public class DataStore implements
 			throw new DataStoreException(e);
 		}
 
-		// Creates the prepared statements.
+		// Create the prepared statements.
 		try {
-			storeExpressionPs = con
-					.prepareStatement("INSERT INTO expressions (expression, starttime) VALUES (?, now());");
-			storeExpressionTimePs = con
-					.prepareStatement("INSERT INTO expressions (expression, starttime) VALUES (?, ?);");
-			setEquivalentIdToIdPs = con
-					.prepareStatement("UPDATE expressions SET equivalentid = id WHERE expression = ?;");
-			iSEquivalentIdSetPs = con
-					.prepareStatement("SELECT id <> equivalentid AS set FROM expressions WHERE id = ?;");
-			isRelativeSetPs = con
-					.prepareStatement("SELECT source.set OR destination.set "
-							+ "FROM (SELECT Count(*) > 0 AS set FROM transitiveclosure "
-							+ "WHERE sourceid IN (SELECT equivalentid FROM conexp WHERE id = ?)) AS source, "
-							+ "(SELECT Count(*) > 0 AS set FROM transitiveclosure "
-							+ "WHERE destinationid IN (SELECT equivalentid FROM conexp WHERE id = ?)) AS destination;");
-			setEquivalentIdPs = con
-					.prepareStatement("UPDATE expressions SET equivalentid = "
-							+ "(SELECT Max(equivalentid) FROM conexp WHERE endtime IS NULL AND id = ?) "
-							+ "WHERE id = ?;");
-			setParentsTableCreate = con
-					.prepareStatement("CREATE TEMPORARY TABLE parents "
-							+ "(id bigint NOT NULL, CONSTRAINT \"PK_parents\" PRIMARY KEY (id)) "
-							+ "ON COMMIT DROP;");
-			setChildrenTableCreate = con
-					.prepareStatement("CREATE TEMPORARY TABLE children "
-							+ "(id bigint NOT NULL, CONSTRAINT \"PK_children\" PRIMARY KEY (id)) "
-							+ "ON COMMIT DROP;");
-			setParentsTableInsert = con
-					.prepareStatement("INSERT INTO parents "
-							+ "(SELECT equivalentid "
-							+ "FROM conexp "
-							+ "WHERE id = ? AND endtime IS NULL AND id NOT IN (SELECT id FROM parents));");
-			setChildrenTableInsert = con
-					.prepareStatement("INSERT INTO children "
-							+ "(SELECT equivalentid "
-							+ "FROM conexp "
-							+ "WHERE id = ? AND endtime IS NULL AND id NOT IN (SELECT id FROM children));");
-			setParentsTableAnalyze = con.prepareStatement("ANALYZE parents;");
-			setChildrenTableAnalyze = con.prepareStatement("ANALYZE children;");
-			setParentsTransitiveclosureParentsInsert = con
-					.prepareStatement("INSERT INTO transitiveclosure "
-							+ "(sourceid, destinationid, starttime, endtime, directrelation) "
-							+ "(SELECT ?, id, now(), null, true FROM parents);");
-			setChildrenTransitiveclosureChildrenInsert = con
-					.prepareStatement("INSERT INTO transitiveclosure "
-							+ "(sourceid, destinationid, starttime, endtime, directrelation) "
-							+ "(SELECT id, ?, now(), null, true FROM children);");
-			setParentsTransitiveclosureAncestorsInsert = con
-					.prepareStatement("INSERT INTO transitiveclosure "
-							+ "(sourceid, destinationid, starttime, endtime, directrelation) "
-							+ "(SELECT ?, destinationid, now(), null, false "
-							+ "FROM transitiveclosure "
-							+ "WHERE sourceid IN (SELECT id FROM parents) AND endtime IS NULL);");
-			setChildrenTransitiveclosureDescendantsInsert = con
-					.prepareStatement("INSERT INTO transitiveclosure "
-							+ "(sourceid, destinationid, starttime, endtime, directrelation) "
-							+ "(SELECT sourceid, ?, now(), null, false "
-							+ "FROM transitiveclosure "
-							+ "WHERE destinationid IN (SELECT id FROM children) AND endtime IS NULL);");
-			convertDirectToIndirectRelationshipCreatePs = con
-					.prepareStatement("INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
-							+ "(SELECT sourceid, destinationid, now(), NULL, false "
-							+ "FROM transitiveclosure "
-							+ "WHERE sourceid IN (SELECT id FROM children) AND destinationid IN (SELECT id FROM parents) AND "
-							+ "endtime IS NULL AND directrelation = true);");
-			convertDirectToIndirectRelationshipRetirePs = con
-					.prepareStatement("UPDATE transitiveclosure SET endtime = now() "
-							+ "WHERE sourceid IN (SELECT id FROM children) AND destinationid IN (SELECT id FROM parents) AND "
-							+ "endtime IS NULL AND directrelation = true;");
-			getExpressionIdPs = con
-					.prepareStatement("SELECT id FROM expressions WHERE expression = ?;");
-			getExpressionIdTimePs = con
-					.prepareStatement("SELECT id FROM expressions WHERE expression = ? "
-							+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			getExpressionPs = con
-					.prepareStatement("SELECT expression FROM expressions WHERE id = ?;");
-			getExpressionTimePs = con
-					.prepareStatement("SELECT expression FROM expressions WHERE id = ? "
-							+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			getDescendantsPs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.destinationid "
-							+ "JOIN conexp AS result ON transitiveclosure.sourceid= result.equivalentid "
-							+ "WHERE base.endtime IS NULL AND transitiveclosure.endtime IS NULL AND result.endtime IS NULL AND "
-							+ "base.id = ?;");
-			getDescendantsTimePs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.destinationid "
-							+ "JOIN conexp AS result ON transitiveclosure.sourceid = result.equivalentid "
-							+ "WHERE base.id = ? AND "
-							+ "base.starttime <= ? AND (? < base.endtime OR base.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "result.starttime <= ? AND (? < result.endtime OR result.endtime IS NULL);");
-			getChildrenPs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.destinationid "
-							+ "JOIN conexp AS result ON transitiveclosure.sourceid = result.equivalentid "
-							+ "WHERE transitiveclosure.directrelation = true AND "
-							+ "base.endtime IS NULL AND transitiveclosure.endtime IS NULL AND result.endtime IS NULL AND "
-							+ "base.id = ?;");
-			getChildrenTimePs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.destinationid "
-							+ "JOIN conexp AS result ON transitiveclosure.sourceid = result.equivalentid "
-							+ "WHERE transitiveclosure.directrelation = true AND "
-							+ "base.id = ? AND "
-							+ "base.starttime <= ? AND (? < base.endtime OR base.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "result.starttime <= ? AND (? < result.endtime OR result.endtime IS NULL);");
-			getAncestorsPs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS result ON transitiveclosure.destinationid = result.equivalentid "
-							+ "WHERE base.endtime IS NULL AND transitiveclosure.endtime IS NULL AND result.endtime IS NULL AND "
-							+ "base.id = ?;");
-			getAncestorsTimePs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS result ON transitiveclosure.destinationid = result.equivalentid "
-							+ "WHERE base.id = ? AND "
-							+ "base.starttime <= ? AND (? < base.endtime OR base.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "result.starttime <= ? AND (? < result.endtime OR result.endtime IS NULL);");
-			getParentsPs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS result ON transitiveclosure.destinationid = result.equivalentid "
-							+ "WHERE transitiveclosure.directrelation = true AND "
-							+ "base.endtime IS NULL AND transitiveclosure.endtime IS NULL AND result.endtime IS NULL AND "
-							+ "base.id = ?;");
-			getParentsTimePs = con
-					.prepareStatement("SELECT result.id "
-							+ "FROM conexp AS base JOIN transitiveclosure ON base.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS result ON transitiveclosure.destinationid = result.equivalentid "
-							+ "WHERE transitiveclosure.directrelation = true AND "
-							+ "base.id = ? AND "
-							+ "base.starttime <= ? AND (? < base.endtime OR base.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "result.starttime <= ? AND (? < result.endtime OR result.endtime IS NULL);");
+			isExistingExpressionPs = con
+					.prepareStatement("SELECT Count(*) > 0 as exist FROM expressions WHERE expression = ?;");
+			setExpressionPs = con
+					.prepareStatement("INSERT INTO expressions (expression, starttime) VALUES (?, ?) RETURNING id;");
+
+			setEquivalentIdGroupPs = con.prepareStatement("INSERT INTO equivalents (id, starttime) SELECT ?, ? "
+					+ "WHERE (SELECT Count(*) = 0 FROM equivalents WHERE id = ? AND starttime <= ? AND ? < endtime)");
+			setEquivalentIdPs = con.prepareStatement("INSERT INTO equivalents (id, starttime, equivalentid) "
+					+ "SELECT ?, ?, equivalentid FROM equivalents WHERE id = ? AND starttime <= ? AND ? < endtime ");
+
+			storeRelativesCreateTableParentsPs = con
+					.prepareStatement("CREATE TEMPORARY TABLE parents_insert (id bigint NOT NULL) ON COMMIT DROP;");
+			storeRelativesCreateTableChildrenPs = con
+					.prepareStatement("CREATE TEMPORARY TABLE children_insert (id bigint NOT NULL) ON COMMIT DROP;");
+			storeRelativesInsertIntoTableParentsPs = con
+					.prepareStatement("INSERT INTO parents_insert (id) VALUES (?);");
+			storeRelativesInsertIntoTableChildrenPs = con
+					.prepareStatement("INSERT INTO children_insert (id) VALUES (?);");
+			storeRelativesAnalyzeTableParentsPs = con.prepareStatement("ANALYZE parents_insert;");
+			storeRelativesAnalyzeTableChildrenPs = con.prepareStatement("ANALYZE children_insert;");
+			storeRelativesParentsExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp " + "FROM ("
+							+ "SELECT DISTINCT ? AS sourceid, parents_insert.id AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, true AS directrelation FROM parents_insert "
+							+ ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesParentsInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT ? AS sourceid, parents_insert.id AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, true AS directrelation FROM parents_insert "
+							+ ") AS insert_rows " + "LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.starttime = transitiveclosure.starttime AND insert_rows.endtime = transitiveclosure.endtime AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+			storeRelativesChildrenExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp " + "FROM ("
+							+ "SELECT DISTINCT children_insert.id AS sourceid, ? AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, true AS directrelation FROM children_insert "
+							+ ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesChildrenInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT children_insert.id AS sourceid, ? AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, true AS directrelation FROM children_insert "
+							+ ") AS insert_rows " + "LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.starttime = transitiveclosure.starttime AND insert_rows.endtime = transitiveclosure.endtime AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+			storeRelativesAncestorsExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp FROM ("
+							+ "SELECT DISTINCT ? AS sourceid, ancestors.destinationid AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS ancestors "
+							+ "WHERE ancestors.sourceid IN (SELECT id FROM parents_insert) AND ancestors.starttime <= ?::timestamp AND ?::timestamp < ancestors.endtime "
+							+ ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesAncestorsInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT ? AS sourceid, ancestors.destinationid AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS ancestors "
+							+ "WHERE ancestors.sourceid IN (SELECT id FROM parents_insert) AND ancestors.starttime <= ?::timestamp AND ?::timestamp < ancestors.endtime "
+							+ ") AS insert_rows LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation AND insert_rows.starttime >= transitiveclosure.starttime AND transitiveclosure.endtime = 'infinity' "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+			storeRelativesDescendantsExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp FROM ("
+							+ "SELECT DISTINCT descendants.sourceid AS sourceid, ? AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS descendants "
+							+ "WHERE descendants.destinationid IN (SELECT id FROM children_insert) AND descendants.starttime <= ?::timestamp AND ?::timestamp < descendants.endtime "
+							+ ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesDescendantsInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT descendants.sourceid AS sourceid, ? AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS descendants "
+							+ "WHERE descendants.destinationid IN (SELECT id FROM children_insert) AND descendants.starttime <= ?::timestamp AND ?::timestamp < descendants.endtime "
+							+ ") AS insert_rows LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation AND insert_rows.starttime >= transitiveclosure.starttime AND transitiveclosure.endtime = 'infinity' "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+			storeRelativesLinkParentsAndChildrenExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp FROM ("
+							+ "SELECT DISTINCT children_insert.id AS sourceid, parents_insert.id AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM children_insert, parents_insert " + ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesLinkParentsAndChildrenInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT children_insert.id AS sourceid, parents_insert.id AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM children_insert, parents_insert "
+							+ ") AS insert_rows LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation AND insert_rows.starttime >= transitiveclosure.starttime AND transitiveclosure.endtime = 'infinity' "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs = con
+					.prepareStatement("UPDATE transitiveclosure SET endtime = 'infinity'::timestamp FROM ("
+							+ "SELECT DISTINCT descendants.sourceid AS sourceid, ancestors.destinationid AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS descendants, transitiveclosure AS ancestors "
+							+ "WHERE descendants.destinationid IN (SELECT id FROM children_insert) AND ancestors.sourceid IN (SELECT ID FROM parents_insert) AND "
+							+ "descendants.starttime <= ?::timestamp AND ?::timestamp < descendants.endtime AND ancestors.starttime <= ?::timestamp AND ?::timestamp < ancestors.endtime "
+							+ ") AS insert_rows "
+							+ "WHERE transitiveclosure.sourceid = insert_rows.sourceid AND transitiveclosure.destinationid = insert_rows.destinationid AND "
+							+ "transitiveclosure.endtime = insert_rows.starttime AND transitiveclosure.directrelation = insert_rows.directrelation;");
+			storeRelativesLinkAncestorsAndDescendantsInsertPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT insert_rows.sourceid, insert_rows.destinationid, insert_rows.starttime, insert_rows.endtime, insert_rows.directrelation FROM ("
+							+ "SELECT DISTINCT descendants.sourceid AS sourceid, ancestors.destinationid AS destinationid, ?::timestamp AS starttime, 'infinity'::timestamp AS endtime, false AS directrelation "
+							+ "FROM transitiveclosure AS descendants, transitiveclosure AS ancestors "
+							+ "WHERE descendants.destinationid IN (SELECT id FROM children_insert) AND ancestors.sourceid IN (SELECT ID FROM parents_insert) AND "
+							+ "descendants.starttime <= ?::timestamp AND ?::timestamp < descendants.endtime AND ancestors.starttime <= ?::timestamp AND ?::timestamp < ancestors.endtime "
+							+ ") AS insert_rows LEFT JOIN transitiveclosure ON "
+							+ "insert_rows.sourceid = transitiveclosure.sourceid AND insert_rows.destinationid = transitiveclosure.destinationid AND "
+							+ "insert_rows.directrelation = transitiveclosure.directrelation AND insert_rows.starttime >= transitiveclosure.starttime AND transitiveclosure.endtime = 'infinity' "
+							+ "WHERE transitiveclosure.sourceid IS NULL;");
+
+			getExpressionIdPs = con.prepareStatement("SELECT id FROM expressions WHERE expression = ? "
+					+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
+
+			getExpressionPs = con.prepareStatement("SELECT expression FROM expressions WHERE id = ? "
+					+ "AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
+
+			getAncestorsPs = con.prepareStatement("SELECT destination_coneqv.id2 AS id "
+					+ "FROM coneqv AS source_coneqv JOIN transitiveclosure ON source_coneqv.id2 = transitiveclosure.sourceid "
+					+ "JOIN coneqv AS destination_coneqv ON transitiveclosure.destinationid = destination_coneqv.id1 "
+					+ "WHERE source_coneqv.id1 = ? AND "
+					+ "source_coneqv.starttime <= ?::timestamp AND ?::timestamp < source_coneqv.endtime AND "
+					+ "transitiveclosure.starttime <= ?::timestamp AND ?::timestamp < transitiveclosure.endtime AND "
+					+ "destination_coneqv.starttime <= ?::timestamp AND ?::timestamp < destination_coneqv.endtime;");
+
+			getDescendantsPs = con.prepareStatement("SELECT source_coneqv.id2 AS id "
+					+ "FROM coneqv AS source_coneqv JOIN transitiveclosure ON source_coneqv.id1 = transitiveclosure.sourceid "
+					+ "JOIN coneqv AS destination_coneqv ON transitiveclosure.destinationid = destination_coneqv.id2 "
+					+ "WHERE destination_coneqv.id1 = ? AND "
+					+ "source_coneqv.starttime <= ?::timestamp AND ?::timestamp < source_coneqv.endtime AND "
+					+ "transitiveclosure.starttime <= ?::timestamp AND ?::timestamp < transitiveclosure.endtime AND "
+					+ "destination_coneqv.starttime <= ?::timestamp AND ?::timestamp < destination_coneqv.endtime;");
+
+			getParentsPs = con.prepareStatement("SELECT destination_coneqv.id2 AS id "
+					+ "FROM coneqv AS source_coneqv JOIN transitiveclosure ON source_coneqv.id2 = transitiveclosure.sourceid "
+					+ "JOIN coneqv AS destination_coneqv ON transitiveclosure.destinationid = destination_coneqv.id1 "
+					+ "WHERE source_coneqv.id1 = ? AND directrelation = true AND "
+					+ "source_coneqv.starttime <= ?::timestamp AND ?::timestamp < source_coneqv.endtime AND "
+					+ "transitiveclosure.starttime <= ?::timestamp AND ?::timestamp < transitiveclosure.endtime AND "
+					+ "destination_coneqv.starttime <= ?::timestamp AND ?::timestamp < destination_coneqv.endtime;");
+
+			getChildrenPs = con.prepareStatement("SELECT source_coneqv.id2 AS id "
+					+ "FROM coneqv AS source_coneqv JOIN transitiveclosure ON source_coneqv.id1 = transitiveclosure.sourceid "
+					+ "JOIN coneqv AS destination_coneqv ON transitiveclosure.destinationid = destination_coneqv.id2 "
+					+ "WHERE destination_coneqv.id1 = ? AND directrelation = true AND "
+					+ "source_coneqv.starttime <= ?::timestamp AND ?::timestamp < source_coneqv.endtime AND "
+					+ "transitiveclosure.starttime <= ?::timestamp AND ?::timestamp < transitiveclosure.endtime AND "
+					+ "destination_coneqv.starttime <= ?::timestamp AND ?::timestamp < destination_coneqv.endtime;");
+
 			getAllExpressionsPs = con
-					.prepareStatement("SELECT id, expression FROM expressions WHERE endtime IS NULL;");
-			getAllExpressionsTimePs = con
-					.prepareStatement("SELECT id, expression FROM expressions WHERE starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			isExistingConceptIdPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM concepts WHERE id = ? AND endtime IS NULL;");
-			isExistingConceptIdTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM concepts WHERE id = ? AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			isExistingExpressionIdPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM expressions WHERE id = ? AND endtime IS NULL;");
-			isExistingExpressionIdTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM expressions WHERE id = ? AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			isExistingIdPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM conexp WHERE id = ? AND endtime IS NULL;");
-			isExistingIdTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM conexp WHERE id = ? AND starttime <= ? AND (? < endtime OR endtime IS NULL);");
-			isSubsumingNotEquivalentPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source JOIN transitiveclosure ON source.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS destination ON transitiveclosure.destinationid = destination.equivalentid "
-							+ "WHERE destination.id = ? AND source.id = ? AND "
-							+ "source.endtime IS NULL AND transitiveclosure.endtime IS NULL AND destination.endtime IS NULL;");
-			isSubsumingNotEquivalentTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source JOIN transitiveclosure ON source.equivalentid = transitiveclosure.sourceid "
-							+ "JOIN conexp AS destination ON transitiveclosure.destinationid = destination.equivalentid "
-							+ "WHERE destination.id = ? AND source.id = ? AND "
-							+ "source.starttime <= ? AND (? < source.endtime OR source.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "destination.starttime <= ? AND (? < destination.endtime OR destination.endtime IS NULL);");
-			isEquivalentPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source JOIN conexp AS destination ON source.equivalentid = destination.equivalentid "
-							+ "WHERE destination.id = ? AND source.id = ? AND "
-							+ "source.endtime IS NULL AND destination.endtime IS NULL;");
-			isEquivalentTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source JOIN conexp AS destination ON source.equivalentid = destination.equivalentid "
-							+ "WHERE destination.id = ? AND source.id = ? AND "
-							+ "source.starttime <= ? AND (? < source.endtime OR source.endtime IS NULL) AND "
-							+ "(? = ? OR True) AND "
-							+ "destination.starttime <= ? AND (? < destination.endtime OR destination.endtime IS NULL);");
-			isSubsumingPs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source, transitiveclosure , conexp AS destination "
-							+ "WHERE ((source.equivalentid = transitiveclosure.sourceid AND transitiveclosure.destinationid = destination.equivalentid) OR "
-							+ "source.equivalentid = destination.equivalentid) AND "
-							+ "destination.id = ? AND source.id = ? AND "
-							+ "source.endtime IS NULL AND transitiveclosure.endtime IS NULL AND destination.endtime IS NULL;");
-			isSubsumingTimePs = con
-					.prepareStatement("SELECT Count(*) >= 1 AS exist "
-							+ "FROM conexp AS source, transitiveclosure , conexp AS destination "
-							+ "WHERE ((source.equivalentid = transitiveclosure.sourceid AND transitiveclosure.destinationid = destination.equivalentid) OR "
-							+ "source.equivalentid = destination.equivalentid) AND "
-							+ "destination.id = ? AND source.id = ? AND "
-							+ "source.starttime <= ? AND (? < source.endtime OR source.endtime IS NULL) AND "
-							+ "transitiveclosure.starttime <= ? AND (? < transitiveclosure.endtime OR transitiveclosure.endtime IS NULL) AND "
-							+ "destination.starttime <= ? AND (? < destination.endtime OR destination.endtime IS NULL);");
+					.prepareStatement("SELECT id, expression FROM expressions WHERE starttime <= ? AND ? < endtime;");
+
+			isSubsumingNotEquivalentPs = con.prepareStatement("SELECT Count(*) > 0 AS exist "
+					+ "FROM coneqv AS source_coneqv JOIN transitiveclosure ON source_coneqv.id2 = transitiveclosure.sourceid "
+					+ "JOIN coneqv AS destination_coneqv ON transitiveclosure.destinationid = destination_coneqv.id2 "
+					+ "WHERE source_coneqv.id1 = ? AND destination_coneqv.id1 = ? AND "
+					+ "source_coneqv.starttime <= ?::timestamp AND ?::timestamp < source_coneqv.endtime AND "
+					+ "transitiveclosure.starttime <= ?::timestamp AND ?::timestamp < transitiveclosure.endtime AND "
+					+ "destination_coneqv.starttime <= ?::timestamp AND ?::timestamp < destination_coneqv.endtime;");
+
+			isEquivalentPs = con.prepareStatement("SELECT Count(*) > 0 AS exist FROM coneqv "
+					+ "WHERE id1 = ? AND id2 = ? AND starttime <= ?::timestamp AND ?::timestamp < endtime;");
+
+			isExistingIdPs = con.prepareStatement("SELECT Count(*) >= 1 AS exist FROM "
+					+ "(SELECT id, starttime, endtime FROM concepts UNION SELECT id, starttime, endtime FROM expressions) AS inn "
+					+ "WHERE id = ? AND starttime <= ? AND ? < endtime;");
+
+			isExistingExpressionIdPs = con.prepareStatement(
+					"SELECT Count(*) >= 1 AS exist FROM expressions WHERE id = ? AND starttime <= ? AND ? < endtime;");
+
+			isFutureEquivalentSetPs = con
+					.prepareStatement("SELECT Count(*) >= 1 AS exist FROM equivalents WHERE id = ? AND starttime > ?;");
+
+			isFutureRelativeSetPs = con.prepareStatement(
+					"SELECT Count(*) >= 1 AS exist FROM transitiveclosure WHERE (sourceid = ? OR destinationid = ?) AND starttime > ?;");
+
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT CASE sourceid WHEN ids.oldid THEN ids.newid ELSE sourceid END AS sourceid, "
+							+ "CASE destinationid WHEN ids.oldid THEN ids.newid ELSE destinationid END AS destinationid, "
+							+ "? AS starttime, endtime, directrelation " + "FROM transitiveclosure JOIN "
+							+ "(SELECT id1 AS oldid, max(id2) AS newid FROM eqv "
+							+ "WHERE id1 = ? AND starttime <= ? AND ? < endtime GROUP BY id1) AS ids "
+							+ "ON transitiveclosure.sourceid = ids.oldid OR transitiveclosure.destinationid = ids.oldid "
+							+ "WHERE transitiveclosure.starttime <= ? AND ? < transitiveclosure.endtime;");
+			inactivateRelativesCreateNewDirectRelationshipsPs = con.prepareStatement(
+					"INSERT INTO transitiveclosure (sourceid, destinationid, starttime, endtime, directrelation) "
+							+ "SELECT children.sourceid, parents.destinationid, "
+							+ "? AS starttime, LEAST(children.endtime, parents.endtime) AS endtime, "
+							+ "true AS directrelation "
+							+ "FROM transitiveclosure AS children JOIN transitiveclosure AS parents ON children.destinationid = parents.sourceid "
+							+ "WHERE children.directrelation = TRUE AND parents.directrelation = TRUE AND children.destinationid = ? AND "
+							+ "children.starttime <= ? AND parents.starttime <= ? AND children.endtime > ? AND parents.endtime > ? AND "
+							+ "(SELECT Count(*) = 0 FROM eqv WHERE id1 = ? AND starttime <= ? AND endtime > ?);");
+			inactivateRelativesSetEndtimePs = con.prepareStatement("UPDATE transitiveclosure SET endtime = ? "
+					+ "WHERE (sourceid = ? OR destinationid = ?) AND starttime < ? AND endtime > ?;");
+			inactivateRelativesDeleteWithCurrentStartTimePs = con.prepareStatement(
+					"DELETE FROM transitiveclosure " + "WHERE starttime = ? AND (sourceid = ? OR destinationid = ?);");
+			inactivateEquivalenceGroupSetEndtimePs = con.prepareStatement("UPDATE equivalents SET endtime = ? FROM eqv "
+					+ "WHERE equivalents.id = eqv.id2 AND equivalents.starttime < ? AND ? < equivalents.endtime AND "
+					+ "eqv.id1 = ? AND eqv.starttime <= ? AND ? < eqv.endtime AND "
+					+ "(SELECT Count(*) = 1 FROM eqv WHERE id1 = ? AND starttime <= ? AND ? < endtime);");
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs = con.prepareStatement(
+					"DELETE FROM equivalents " + "WHERE starttime = ? AND id IN " + "(SELECT id2 FROM eqv "
+							+ "WHERE eqv.id1 = ? AND eqv.starttime <= ? AND ? < eqv.endtime AND "
+							+ "(SELECT Count(*) = 1 FROM eqv WHERE id1 = ? AND starttime <= ? AND ? < endtime))");
+			inactivateEquivalenceSetEndtimePs = con.prepareStatement(
+					"UPDATE equivalents SET endtime = ? WHERE id = ? AND starttime < ? AND endtime > ?;");
+			inactivateEquivalenceDeleteWithCurrentStartTimePs = con
+					.prepareStatement("DELETE FROM equivalents WHERE (starttime = ? AND id = ?);");
+
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
+
 	}
 
 	/*
@@ -553,209 +521,344 @@ public class DataStore implements
 		super.finalize();
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#storeExpression(java.lang.String,
+	 * java.util.Date)
+	 */
 	@Override
 	public ExpressionId storeExpression(final String expression, final Date time)
 			throws DataStoreException, ExpressionAlreadyExistsException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
+		final ExpressionId result;
 		try {
 			// Check if the expression already exists in the dbms.
-			if (getExpressionId(expression, null) != null) {
-				throw new ExpressionAlreadyExistsException("The expression "
-						+ expression + " already exists in the data store.");
+			isExistingExpressionPs.setString(1, expression);
+			final ResultSet isExistingExpressionRs = isExistingExpressionPs.executeQuery();
+			isExistingExpressionRs.next();
+			if (isExistingExpressionRs.getBoolean("exist")) {
+				throw new ExpressionAlreadyExistsException(
+						"The expression " + expression + " already exists in the data store.");
 			}
-			// Store the expression in the dbms and set the equivalent id to the
-			// expression's own id.
-			con.setAutoCommit(false);
-			if (sqlTimestamp == null) {
-				storeExpressionPs.setString(1, expression);
-				storeExpressionPs.executeUpdate();
-			} else {
-				storeExpressionTimePs.setString(1, expression);
-				storeExpressionTimePs.setTimestamp(2, sqlTimestamp);
-				storeExpressionTimePs.executeUpdate();
-			}
-			setEquivalentIdToIdPs.setString(1, expression);
-			setEquivalentIdToIdPs.executeUpdate();
-			con.commit();
-			con.setAutoCommit(true);
+			// Store the expression in the dbms.
+			setExpressionPs.setString(1, expression);
+			setExpressionPs.setTimestamp(2, sqlTimestamp);
+			final ResultSet setExpressionRs = setExpressionPs.executeQuery();
+			// Return the assigned expression id.
+			setExpressionRs.next();
+			result = new ExpressionId(setExpressionRs.getLong("id"));
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
-		// Return the assigned expression id.
-		return getExpressionId(expression, sqlTimestamp);
+		return result;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#storeExpressionEquivalence(se.liu.imt.mi.snomedct
+	 * .expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
+	 * java.util.Date)
+	 * 
+	 */
 	@Override
-	public void storeExpressionEquivalence(ExpressionId id,
-			ExpressionId equivalentExpressionId) throws DataStoreException,
-			NonExistingIdException, RelativeAlreadySetException {
+	public void storeExpressionEquivalence(ExpressionId id, ExpressionId equivalentExpressionId, Date time)
+			throws DataStoreException, NonExistingIdException, ExpressionAlreadyDefined {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
 		try {
 			// Check if the expression id exists in the dbms.
-			if (!isExistingExpressionId(id, null)) {
-				throw new NonExistingIdException("The expression id "
-						+ id.getId() + " do not exists in the data store.");
+			if (!isExistingExpressionId(id, sqlTimestamp)) {
+				throw new NonExistingIdException("The expression id " + id.getId()
+						+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
 			}
-
-			// Check if the expression already has got an equivalence expression
-			// id set.
-			if (isEquivalentIdSet(id)) {
-				throw new RelativeAlreadySetException("The expression with id "
-						+ id.getId() + " has already an equivalent id set");
-			}
-
-			// Check if the expression already has any parent or child set.
-			if (isRelativeSet(id)) {
-				throw new RelativeAlreadySetException("The expression with id "
-						+ id.getId()
-						+ " has already at least one parent or child set.");
-			}
-
 			// Check if the equivalent expression id exists in the dbms.
-			if (!(isExistingExpressionId(equivalentExpressionId, null) || isExistingConceptId(
-					equivalentExpressionId, null))) {
-				throw new NonExistingIdException(
-						"The equivalent expression id "
-								+ equivalentExpressionId.getId()
-								+ " do not exists in the data store.");
+			if (!isExistingId(equivalentExpressionId, sqlTimestamp)) {
+				throw new NonExistingIdException("The id " + equivalentExpressionId.getId()
+						+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+			}
+			// Check if the id and equivalentExpressionId are equal.
+			if (id.equals(equivalentExpressionId)) {
+				throw new NonExistingIdException("It can not be stored in the data store that the expression with id "
+						+ id.getId() + " is equivalent to itself.");
 			}
 
-			// Update the equivalent expression id if the equivalent expression
-			// is a concept.
-			setEquivalentIdPs.setLong(1, equivalentExpressionId.getId());
-			setEquivalentIdPs.setLong(2, id.getId());
-			setEquivalentIdPs.executeUpdate();
-		} catch (SQLException e) {
-			throw new DataStoreException(e);
-		}
-	}
-
-	@Override
-	public void storeExpressionParentsAndChildren(ExpressionId id,
-			Set<ExpressionId> parents, Set<ExpressionId> children)
-			throws DataStoreException, NonExistingIdException,
-			RelativeAlreadySetException {
-		try {
-			// Check if the expression's id exists in the dbms.
-			if (!isExistingExpressionId(id, null)) {
-				throw new NonExistingIdException("The specified id "
-						+ id.getId() + " do not exists in the data store.");
+			// Check if an equivalence with a future start time already has been set.
+			if (isFutureEquivalentSet(id, sqlTimestamp)) {
+				throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+						+ " has already an equivalent id set with a start time in the future.");
+			}
+			// Check if parent(s) and/or child(ren) with a future start time already has been set.
+			if (isFutureRelativeSet(id, sqlTimestamp)) {
+				throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+						+ " has already parent(s) and/or child(ren) set with a start time in the future.");
 			}
 
-			// Check if the expression already has got an equivalence expression
-			// id set.
-			if (isEquivalentIdSet(id)) {
-				throw new RelativeAlreadySetException("The expression with id "
-						+ id.getId() + " has already an equivalent id set");
-			}
-
-			// Check if the expression already has any parent or child set.
-			if (isRelativeSet(id)) {
-				throw new RelativeAlreadySetException("The expression with id "
-						+ id.getId()
-						+ " has already at least one parent or child set.");
-			}
-
-			// Check if the parents exists in the dbms.
-			for (ExpressionId parentId : parents) {
-				if (!isExistingId(parentId, null)) {
-					throw new NonExistingIdException("The specified parent id "
-							+ parentId.getId()
-							+ " do not exists in the data store.");
-				}
-			}
-
-			// Check if the children exists in the dbms.
-			for (ExpressionId childId : children) {
-				if (!isExistingId(childId, null)) {
-					throw new NonExistingIdException("The specified child id "
-							+ childId.getId()
-							+ " do not exists in the data store.");
-				}
-			}
-
-			// Switch of auto commit so all updates are done in the same
-			// transaction.
+			// Switch of auto commit so all updates are done in the same transaction.
 			con.setAutoCommit(false);
 
-			// Create a temporary table for the parents' id.
-			setParentsTableCreate.executeUpdate();
+			// Inactivate the definition for the expression to set the equivalence for.
+			inactivateExpressionDefinition(id, sqlTimestamp);
+			// Store the id in an equivalent expression group if there is no suitable equivalent expression group
+			// already existing in the dbms.
+			setEquivalentIdGroupPs.setLong(1, equivalentExpressionId.getId());
+			setEquivalentIdGroupPs.setTimestamp(2, sqlTimestamp);
+			setEquivalentIdGroupPs.setLong(3, equivalentExpressionId.getId());
+			setEquivalentIdGroupPs.setTimestamp(4, sqlTimestamp);
+			setEquivalentIdGroupPs.setTimestamp(5, sqlTimestamp);
+			setEquivalentIdGroupPs.executeUpdate();
 
-			// Create a temporary table for the children's id.
-			setChildrenTableCreate.executeUpdate();
-
-			// Insert the parents' id in the temporary table.
-			for (ExpressionId parentId : parents) {
-				setParentsTableInsert.setLong(1, parentId.getId());
-				setParentsTableInsert.executeUpdate();
-			}
-
-			// Insert the children's id in the temporary table.
-			for (ExpressionId childId : children) {
-				setChildrenTableInsert.setLong(1, childId.getId());
-				setChildrenTableInsert.executeUpdate();
-			}
-
-			// Analyze the temporary table for the parents' id.
-			setParentsTableAnalyze.executeUpdate();
-
-			// Analyze the temporary table for the parents' id.
-			setChildrenTableAnalyze.executeUpdate();
-
-			// Insert the parents into the transitive closure table.
-			setParentsTransitiveclosureParentsInsert.setLong(1, id.getId());
-			setParentsTransitiveclosureParentsInsert.executeUpdate();
-
-			// Insert the children into the transitive closure table.
-			setChildrenTransitiveclosureChildrenInsert.setLong(1, id.getId());
-			setChildrenTransitiveclosureChildrenInsert.executeUpdate();
-
-			// Inserts the ancestors into the transitive closure table.
-			setParentsTransitiveclosureAncestorsInsert.setLong(1, id.getId());
-			setParentsTransitiveclosureAncestorsInsert.executeUpdate();
-
-			// Inserts the descendants into the transitive closure table.
-			setChildrenTransitiveclosureDescendantsInsert
-					.setLong(1, id.getId());
-			setChildrenTransitiveclosureDescendantsInsert.executeUpdate();
-
-			// Store the current direct relationships as indirect relationships.
-			convertDirectToIndirectRelationshipCreatePs.executeUpdate();
-
-			// Retire the current direct relationships
-			convertDirectToIndirectRelationshipRetirePs.executeUpdate();
+			// Store the id in the equivalent expression group in the dbms.
+			setEquivalentIdPs.setLong(1, id.getId());
+			setEquivalentIdPs.setTimestamp(2, sqlTimestamp);
+			setEquivalentIdPs.setLong(3, equivalentExpressionId.getId());
+			setEquivalentIdPs.setTimestamp(4, sqlTimestamp);
+			setEquivalentIdPs.setTimestamp(5, sqlTimestamp);
+			setEquivalentIdPs.executeUpdate();
 
 			// Commit all updates
 			con.commit();
-			// // Switch on auto commit.
+			// Switch on auto commit.
+			con.setAutoCommit(true);
+
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#storeExpressionParentsAndChildren(se.liu.imt.mi.
+	 * snomedct.expressionrepository.datatypes.ExpressionId, java.util.Set, java.util.Set, java.util.Date)
+	 */
+	@Override
+	public void storeExpressionParentsAndChildren(ExpressionId id, Set<ExpressionId> parents,
+			Set<ExpressionId> children, Date time)
+					throws DataStoreException, NonExistingIdException, ExpressionAlreadyDefined {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
+
+		// Check if the expression's id exists in the dbms.
+		if (!isExistingExpressionId(id, sqlTimestamp)) {
+			throw new NonExistingIdException("The specified id " + id.getId()
+					+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+		}
+
+		// Check if an equivalence with a future start time already has been set.
+		if (isFutureEquivalentSet(id, sqlTimestamp)) {
+			throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+					+ " has already an equivalent id set with a start time in the future.");
+		}
+		// Check if parent(s) and/or child(ren) with a future start time already has been set.
+		if (isFutureRelativeSet(id, sqlTimestamp)) {
+			throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+					+ " has already parent(s) and/or child(ren) set with a start time in the future.");
+		}
+
+		if (parents != null) {
+			// Check if the parents exists in the dbms.
+			for (ExpressionId parentId : parents) {
+				if (!isExistingId(parentId, sqlTimestamp)) {
+					throw new NonExistingIdException("The specified parent id " + parentId.getId()
+							+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+				}
+			}
+			// Check if any of the parents have an equivalence with a future start time set.
+			for (ExpressionId parentId : parents) {
+				if (isFutureEquivalentSet(parentId, sqlTimestamp)) {
+					throw new ExpressionAlreadyDefined("The parent expression with id " + parentId.getId()
+							+ " has already an equivalent id set with a start time in the future.");
+				}
+				if (isFutureRelativeSet(parentId, sqlTimestamp)) {
+					throw new ExpressionAlreadyDefined("The parent expression with id " + parentId.getId()
+							+ " has already parent(s) and/or child(ren) set with a start time in the future.");
+				}
+			}
+		}
+
+		if (children != null) {
+			// Check if the children exists in the dbms.
+			for (ExpressionId childId : children) {
+				if (!isExistingId(childId, sqlTimestamp)) {
+					throw new NonExistingIdException("The specified child id " + childId.getId()
+							+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+				}
+			}
+			// Check if any of the children have an equivalence with a future start time set.
+			for (ExpressionId childId : children) {
+				if (isFutureEquivalentSet(childId, sqlTimestamp)) {
+					throw new ExpressionAlreadyDefined("The child expression with id " + childId.getId()
+							+ " has already an equivalent id set with a start time in the future.");
+				}
+				if (isFutureRelativeSet(childId, sqlTimestamp)) {
+					throw new ExpressionAlreadyDefined("The child expression with id " + childId.getId()
+							+ " has already parent(s) and/or child(ren) set with a start time in the future.");
+				}
+			}
+		}
+
+		try {
+			// Switch of auto commit so all updates are done in the same transaction.
+			con.setAutoCommit(false);
+
+			// Inactivate the definition for the expression to set the equivalence for.
+			inactivateExpressionDefinition(id, sqlTimestamp);
+
+			// Store the parent(s) in a temporary table.
+			storeRelativesCreateTableParentsPs.executeUpdate();
+			if (parents != null) {
+				for (ExpressionId parentId : parents) {
+					storeRelativesInsertIntoTableParentsPs.setLong(1, parentId.getId());
+					storeRelativesInsertIntoTableParentsPs.executeUpdate();
+				}
+			}
+			storeRelativesAnalyzeTableParentsPs.executeUpdate();
+
+			// Store the child(ren) in a temporary table.
+			storeRelativesCreateTableChildrenPs.executeUpdate();
+			if (children != null) {
+				for (ExpressionId childId : children) {
+					storeRelativesInsertIntoTableChildrenPs.setLong(1, childId.getId());
+					storeRelativesInsertIntoTableChildrenPs.executeUpdate();
+				}
+			}
+			storeRelativesAnalyzeTableChildrenPs.executeUpdate();
+
+			// Store the parents in the transitive closure table.
+			storeRelativesParentsExtendEndtimePs.setLong(1, id.getId());
+			storeRelativesParentsExtendEndtimePs.setTimestamp(2, sqlTimestamp);
+			storeRelativesParentsExtendEndtimePs.executeUpdate();
+			storeRelativesParentsInsertPs.setLong(1, id.getId());
+			storeRelativesParentsInsertPs.setTimestamp(2, sqlTimestamp);
+			storeRelativesParentsInsertPs.executeUpdate();
+
+			// Store the children in the transitive closure table.
+			storeRelativesChildrenExtendEndtimePs.setLong(1, id.getId());
+			storeRelativesChildrenExtendEndtimePs.setTimestamp(2, sqlTimestamp);
+			storeRelativesChildrenExtendEndtimePs.executeUpdate();
+			storeRelativesChildrenInsertPs.setLong(1, id.getId());
+			storeRelativesChildrenInsertPs.setTimestamp(2, sqlTimestamp);
+			storeRelativesChildrenInsertPs.executeUpdate();
+
+			// Store the ancestors in the transitive closure table.
+			storeRelativesAncestorsExtendEndtimePs.setLong(1, id.getId());
+			storeRelativesAncestorsExtendEndtimePs.setTimestamp(2, sqlTimestamp);
+			storeRelativesAncestorsExtendEndtimePs.setTimestamp(3, sqlTimestamp);
+			storeRelativesAncestorsExtendEndtimePs.setTimestamp(4, sqlTimestamp);
+			storeRelativesAncestorsExtendEndtimePs.executeUpdate();
+			storeRelativesAncestorsInsertPs.setLong(1, id.getId());
+			storeRelativesAncestorsInsertPs.setTimestamp(2, sqlTimestamp);
+			storeRelativesAncestorsInsertPs.setTimestamp(3, sqlTimestamp);
+			storeRelativesAncestorsInsertPs.setTimestamp(4, sqlTimestamp);
+			storeRelativesAncestorsInsertPs.executeUpdate();
+
+			// Store the descendants in the transitive closure table.
+			storeRelativesDescendantsExtendEndtimePs.setLong(1, id.getId());
+			storeRelativesDescendantsExtendEndtimePs.setTimestamp(2, sqlTimestamp);
+			storeRelativesDescendantsExtendEndtimePs.setTimestamp(3, sqlTimestamp);
+			storeRelativesDescendantsExtendEndtimePs.setTimestamp(4, sqlTimestamp);
+			storeRelativesDescendantsExtendEndtimePs.executeUpdate();
+			storeRelativesDescendantsInsertPs.setLong(1, id.getId());
+			storeRelativesDescendantsInsertPs.setTimestamp(2, sqlTimestamp);
+			storeRelativesDescendantsInsertPs.setTimestamp(3, sqlTimestamp);
+			storeRelativesDescendantsInsertPs.setTimestamp(4, sqlTimestamp);
+			storeRelativesDescendantsInsertPs.executeUpdate();
+
+			// Store the link between the parents and children in the transitive closure table.
+			storeRelativesLinkParentsAndChildrenExtendEndtimePs.setTimestamp(1, sqlTimestamp);
+			storeRelativesLinkParentsAndChildrenExtendEndtimePs.executeUpdate();
+
+			storeRelativesLinkParentsAndChildrenInsertPs.setTimestamp(1, sqlTimestamp);
+			storeRelativesLinkParentsAndChildrenInsertPs.executeUpdate();
+
+			// Store the link between the ancestors and descendants in the transitive closure table.
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.setTimestamp(1, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.setTimestamp(2, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.setTimestamp(3, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.setTimestamp(4, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.setTimestamp(5, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsExtendEndtimePs.executeUpdate();
+
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.setTimestamp(1, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.setTimestamp(2, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.setTimestamp(3, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.setTimestamp(4, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.setTimestamp(5, sqlTimestamp);
+			storeRelativesLinkAncestorsAndDescendantsInsertPs.executeUpdate();
+
+			// Commit all updates
+			con.commit();
+			// Switch on auto commit.
 			con.setAutoCommit(true);
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#inactivateExpressionDefinition(se.liu.imt.mi.
+	 * snomedct.expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public ExpressionId getExpressionId(String expression, Date time)
-			throws DataStoreException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
+	public void inactivateExpressionDefinition(ExpressionId id, Date time)
+			throws DataStoreException, NonExistingIdException, ExpressionAlreadyDefined {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
+		try {
+			// Check if the expression id exists in the dbms.
+			if (!isExistingExpressionId(id, sqlTimestamp)) {
+				throw new NonExistingIdException("The expression id " + id.getId()
+						+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+			}
+
+			// Check if an equivalence with a future start time already has been set.
+			if (isFutureEquivalentSet(id, sqlTimestamp)) {
+				throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+						+ " has already an equivalent id set with a start time in the future.");
+			}
+			// Check if parent(s) and/or child(ren) with a future start time already has been set.
+			if (isFutureRelativeSet(id, sqlTimestamp)) {
+				throw new ExpressionAlreadyDefined("The expression with id " + id.getId()
+						+ " has already parent(s) and/or child(ren) set with a start time in the future.");
+			}
+
+			// Switch of auto commit so all updates are done in the same transaction.
+			con.setAutoCommit(false);
+			// Inactivate the definition for the expression.
+			inactivateExpressionDefinition(id, sqlTimestamp);
+			// Commit all updates
+			con.commit();
+			// Switch on auto commit.
+			con.setAutoCommit(true);
+
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getExpressionId(java.lang.String,
+	 * java.util.Date)
+	 */
+	@Override
+	public ExpressionId getExpressionId(String expression, Date time) throws DataStoreException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
 		final ExpressionId result;
 		try {
-			final ResultSet getExpressionIdRs;
-			// Look up expression id when no time is given.
-			if (sqlTimestamp == null) {
-				getExpressionIdPs.setString(1, expression);
-				getExpressionIdRs = getExpressionIdPs.executeQuery();
-			} else {
-				// Look up expression id when a time is given.
-				getExpressionIdTimePs.setString(1, expression);
-				getExpressionIdTimePs.setTimestamp(2, sqlTimestamp);
-				getExpressionIdTimePs.setTimestamp(3, sqlTimestamp);
-				getExpressionIdRs = getExpressionIdTimePs.executeQuery();
-			}
+			// Look up expression id.
+			getExpressionIdPs.setString(1, expression);
+			getExpressionIdPs.setTimestamp(2, sqlTimestamp);
+			getExpressionIdPs.setTimestamp(3, sqlTimestamp);
+			final ResultSet getExpressionIdRs = getExpressionIdPs.executeQuery();
 			// Store the result in the variable.
 			if (getExpressionIdRs.next()) {
-				result = new ExpressionId(getExpressionIdRs.getLong(1));
+				result = new ExpressionId(getExpressionIdRs.getLong("id"));
 			} else {
 				result = null;
 			}
@@ -765,84 +868,102 @@ public class DataStore implements
 		return result;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getExpression(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public String getExpression(ExpressionId id, Date time)
-			throws DataStoreException, NonExistingIdException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
+	public String getExpression(ExpressionId id, Date time) throws DataStoreException, NonExistingIdException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
 		final String result;
 		try {
-			// Check if the expression id exists in the dbms.
-			if (!isExistingExpressionId(id, time)) {
-				throw new NonExistingIdException("The expression id "
-						+ id.getId() + " do not exists in the data store.");
-			}
-			final ResultSet getExpressionRs;
-			// Look up expression when no time is given.
-			if (sqlTimestamp == null) {
-				getExpressionPs.setLong(1, id.getId());
-				getExpressionRs = getExpressionPs.executeQuery();
-			} else {
-				// Look up expression when a time is given.
-				getExpressionTimePs.setLong(1, id.getId());
-				getExpressionTimePs.setTimestamp(2, sqlTimestamp);
-				getExpressionTimePs.setTimestamp(3, sqlTimestamp);
-				getExpressionRs = getExpressionTimePs.executeQuery();
-			}
+			// Look up the expression.
+			getExpressionPs.setLong(1, id.getId());
+			getExpressionPs.setTimestamp(2, sqlTimestamp);
+			getExpressionPs.setTimestamp(3, sqlTimestamp);
+			final ResultSet getExpressionRs = getExpressionPs.executeQuery();
 			// Store the result in the variable.
-			getExpressionRs.next();
-			result = getExpressionRs.getString(1);
+			if (!getExpressionRs.next()) {
+				// The expression id does not exists in the dbms.
+				throw new NonExistingIdException(
+						"The expression id " + id.getId() + " do not exists in the data store at the specified time.");
+			} else {
+				result = getExpressionRs.getString("expression");
+			}
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
 		return result;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getAncestors(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public HashSet<ExpressionId> getDescendants(ExpressionId id, Date time)
+	public Set<ExpressionId> getAncestors(ExpressionId id, Date time)
 			throws DataStoreException, NonExistingIdException {
-		return getRelative(getDescendantsPs, getDescendantsTimePs, id, time);
+		return getRelative(id, time, getAncestorsPs);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getDescendants(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public HashSet<ExpressionId> getChildren(ExpressionId id, Date time)
+	public Set<ExpressionId> getDescendants(ExpressionId id, Date time)
 			throws DataStoreException, NonExistingIdException {
-		return getRelative(getChildrenPs, getChildrenTimePs, id, time);
+		return getRelative(id, time, getDescendantsPs);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getParents(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public HashSet<ExpressionId> getAncestors(ExpressionId id, Date time)
-			throws DataStoreException, NonExistingIdException {
-		return getRelative(getAncestorsPs, getAncestorsTimePs, id, time);
+	public Set<ExpressionId> getParents(ExpressionId id, Date time) throws DataStoreException, NonExistingIdException {
+		return getRelative(id, time, getParentsPs);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getChildren(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public HashSet<ExpressionId> getParents(ExpressionId id, Date time)
-			throws DataStoreException, NonExistingIdException {
-		return getRelative(getParentsPs, getParentsTimePs, id, time);
+	public Set<ExpressionId> getChildren(ExpressionId id, Date time) throws DataStoreException, NonExistingIdException {
+		return getRelative(id, time, getChildrenPs);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#getAllExpressions(java.util.Date)
+	 */
 	@Override
-	public Set<Expression> getAllExpressions(Date time)
-			throws DataStoreException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
+	public Set<Expression> getAllExpressions(Date time) throws DataStoreException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
 		final HashSet<Expression> result = new HashSet<Expression>();
 		try {
 			// Look up all expressions.
 			final ResultSet getAllExpressionsRs;
-			if (time == null) {
-				getAllExpressionsRs = getAllExpressionsPs.executeQuery();
-			} else {
-				getAllExpressionsTimePs.setTimestamp(1, sqlTimestamp);
-				getAllExpressionsTimePs.setTimestamp(2, sqlTimestamp);
-				getAllExpressionsRs = getAllExpressionsTimePs.executeQuery();
-			}
+			getAllExpressionsPs.setTimestamp(1, sqlTimestamp);
+			getAllExpressionsPs.setTimestamp(2, sqlTimestamp);
+			getAllExpressionsRs = getAllExpressionsPs.executeQuery();
 
-			// Store the expression in the linked list.
+			// Store the expressions.
 			while (getAllExpressionsRs.next()) {
-				result.add(new Expression(new ExpressionId(getAllExpressionsRs
-						.getLong(1)), getAllExpressionsRs.getString(2)));
+				result.add(new Expression(new ExpressionId(getAllExpressionsRs.getLong("id")),
+						getAllExpressionsRs.getString("expression")));
 			}
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
@@ -850,98 +971,53 @@ public class DataStore implements
 		return result;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isExistingId(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, java.util.Date)
+	 */
 	@Override
-	public boolean isSubsumingNotEquivalent(ExpressionId id1, ExpressionId id2,
-			Date time) throws DataStoreException {
-		return isSE(id1, id2, time, isSubsumingNotEquivalentPs,
-				isSubsumingNotEquivalentTimePs);
+	public boolean isExistingId(ExpressionId id, Date time) throws DataStoreException {
+		return isExistingId(id, convertOrSetCurrentTimestampToSQLTimestamp(time));
 	}
 
 	/*
 	 * (non-Javadoc)
 	 * 
 	 * @see
-	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isEquivalent
-	 * (se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
-	 * se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
+	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isSubsumingNotEquivalent(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
 	 * java.util.Date)
 	 */
 	@Override
-	public boolean isEquivalent(ExpressionId id1, ExpressionId id2, Date time)
-			throws DataStoreException {
-		return isSE(id1, id2, time, isEquivalentPs, isEquivalentTimePs);
-	}
+	public boolean isSubsumingNotEquivalent(ExpressionId ancestorId, ExpressionId descendantId, Date time)
+			throws DataStoreException, NonExistingIdException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isSubsuming
-	 * (se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
-	 * se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
-	 * java.util.Date)
-	 */
-	@Override
-	public boolean isSubsuming(ExpressionId id1, ExpressionId id2, Date time)
-			throws DataStoreException {
-		// Changed to use the two other methods to improve the performance.
-		// return isSE(id1, id2, time, isSubsumingPs, isSubsumingTimePs);
-		return (isSubsumingNotEquivalent(id1, id2, time) || isEquivalent(id1,
-				id2, time));
-	}
+		// Check if the ids exists in the dbms.
+		if (!isExistingId(ancestorId, sqlTimestamp)) {
+			throw new NonExistingIdException("The ancestor id " + ancestorId.getId().toString()
+					+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+		}
+		if (!isExistingId(descendantId, sqlTimestamp)) {
+			throw new NonExistingIdException("The descendant id " + descendantId.getId().toString()
+					+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+		}
 
-	@Override
-	public boolean isExistingId(ExpressionId id, Date time)
-			throws DataStoreException {
-		return isExiId(id, time, isExistingIdPs, isExistingIdTimePs);
-	}
-
-	/**
-	 * Check if one concept or expression is subsuming and/or id equivalent
-	 * another concept or expression at a specific time.
-	 * 
-	 * @param id1
-	 *            The id1 of the concept or expression.
-	 * @param id2
-	 *            The id2 of the concept or expression.
-	 * @param time
-	 *            The specific time. A <code>null</code> value is handled as the
-	 *            current time.
-	 * @param isWithoutTimePs
-	 *            The <code>PreparedStatement</code> to use if no time is given.
-	 * @param isWithTimePs
-	 *            The <code>PreparedStatement</code> to use if a time is given.
-	 * @return if the concept or expression is subsuming and/or is equivalent to
-	 *         another concept or expression.
-	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.
-	 */
-	private boolean isSE(ExpressionId id1, ExpressionId id2, Date time,
-			PreparedStatement isWithoutTimePs, PreparedStatement isWithTimePs)
-			throws DataStoreException {
 		final boolean result;
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
-
 		try {
-			final ResultSet isRs;
-			// Look up if an id exists when no time is given.
-			if (sqlTimestamp == null) {
-				isWithoutTimePs.setLong(1, id1.getId());
-				isWithoutTimePs.setLong(2, id2.getId());
-				isRs = isWithoutTimePs.executeQuery();
-			} else {
-				// Look up if an id exists when a time is given.
-				isWithTimePs.setLong(1, id1.getId());
-				isWithTimePs.setLong(2, id2.getId());
-				isWithTimePs.setTimestamp(3, sqlTimestamp);
-				isWithTimePs.setTimestamp(4, sqlTimestamp);
-				isWithTimePs.setTimestamp(5, sqlTimestamp);
-				isWithTimePs.setTimestamp(6, sqlTimestamp);
-				isWithTimePs.setTimestamp(7, sqlTimestamp);
-				isWithTimePs.setTimestamp(8, sqlTimestamp);
-				isRs = isWithTimePs.executeQuery();
-			}
+			// Checks if an concept or expression subsumes but is not equivalent to another concept or expression at a
+			// specific time.
+			isSubsumingNotEquivalentPs.setLong(1, descendantId.getId());
+			isSubsumingNotEquivalentPs.setLong(2, ancestorId.getId());
+			isSubsumingNotEquivalentPs.setTimestamp(3, sqlTimestamp);
+			isSubsumingNotEquivalentPs.setTimestamp(4, sqlTimestamp);
+			isSubsumingNotEquivalentPs.setTimestamp(5, sqlTimestamp);
+			isSubsumingNotEquivalentPs.setTimestamp(6, sqlTimestamp);
+			isSubsumingNotEquivalentPs.setTimestamp(7, sqlTimestamp);
+			isSubsumingNotEquivalentPs.setTimestamp(8, sqlTimestamp);
+			final ResultSet isRs = isSubsumingNotEquivalentPs.executeQuery();
 			isRs.next();
 			result = isRs.getBoolean("exist");
 		} catch (SQLException e) {
@@ -950,21 +1026,70 @@ public class DataStore implements
 		return result;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isEquivalent(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
+	 * java.util.Date)
+	 */
+	@Override
+	public boolean isEquivalent(ExpressionId id1, ExpressionId id2, Date time)
+			throws DataStoreException, NonExistingIdException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
+
+		// Check if the ids exists in the dbms.
+		if (!isExistingId(id1, sqlTimestamp)) {
+			throw new NonExistingIdException("The id " + id1.getId().toString()
+					+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+		}
+		if (!isExistingId(id2, sqlTimestamp)) {
+			throw new NonExistingIdException("The id " + id2.getId().toString()
+					+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+		}
+
+		final boolean result;
+		try {
+			// Checks if an concept or expression is equivalent to another concept or expression at a specific time.
+			isEquivalentPs.setLong(1, id1.getId());
+			isEquivalentPs.setLong(2, id2.getId());
+			isEquivalentPs.setTimestamp(3, sqlTimestamp);
+			isEquivalentPs.setTimestamp(4, sqlTimestamp);
+			final ResultSet isEquivalentRs = isEquivalentPs.executeQuery();
+			isEquivalentRs.next();
+			result = isEquivalentRs.getBoolean("exist");
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore#isSubsuming(se.liu.imt.mi.snomedct.
+	 * expressionrepository.datatypes.ExpressionId, se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId,
+	 * java.util.Date)
+	 */
+	@Override
+	public boolean isSubsuming(ExpressionId ancestorId, ExpressionId descendantId, Date time)
+			throws DataStoreException, NonExistingIdException {
+		return isEquivalent(ancestorId, descendantId, time) || isSubsumingNotEquivalent(ancestorId, descendantId, time);
+	}
+
 	/**
-	 * Check if a specified concept id exists in the dbms.
+	 * Check if a specified id exists in the dbms.
 	 * 
 	 * @param id
-	 *            The specified concept id.
-	 * @param time
-	 *            The given time.
-	 * @return If the concept id exists in the data store or not.
+	 *            The specified id.
+	 * @param sqlTimestamp
+	 *            The specific time. A <code>null</code> value is handled as an error.
+	 * @return If the id exists in the data store or not.
 	 * @throws DataStoreException
 	 *             Thrown if there are any problem with the data store.
 	 */
-	private boolean isExistingConceptId(final ExpressionId id, Date time)
-			throws DataStoreException {
-		return isExiId(id, time, isExistingConceptIdPs,
-				isExistingConceptIdTimePs);
+	private boolean isExistingId(final ExpressionId id, final Timestamp sqlTimestamp) throws DataStoreException {
+		return isExiId(id, sqlTimestamp, isExistingIdPs);
 	}
 
 	/**
@@ -972,159 +1097,40 @@ public class DataStore implements
 	 * 
 	 * @param id
 	 *            The specified expression id.
-	 * @param time
-	 *            The given time.
+	 * @param sqlTimestamp
+	 *            The specific time. A <code>null</code> value is handled as an error.
 	 * @return If the expression id exists in the date store or not.
 	 * @throws DataStoreException
 	 *             Thrown if there are any problem with the data store.
 	 */
-	private boolean isExistingExpressionId(final ExpressionId id, Date time)
+	private boolean isExistingExpressionId(final ExpressionId id, final Timestamp sqlTimestamp)
 			throws DataStoreException {
-		return isExiId(id, time, isExistingExpressionIdPs,
-				isExistingExpressionIdTimePs);
+		return isExiId(id, sqlTimestamp, isExistingExpressionIdPs);
 	}
 
 	/**
-	 * Check if the expression already has got an equivalence expression id set.
-	 * 
-	 * @param id
-	 *            The expression's id to check the existence of a equivalence
-	 *            expression for.
-	 * @return If the expression already has got an equivalence expression id
-	 *         set or not.
-	 * 
-	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.
-	 */
-	private boolean isEquivalentIdSet(ExpressionId id)
-			throws DataStoreException {
-		try {
-			iSEquivalentIdSetPs.setLong(1, id.getId());
-			ResultSet isEquivalentIdSetRs = iSEquivalentIdSetPs.executeQuery();
-			isEquivalentIdSetRs.next();
-			return isEquivalentIdSetRs.getBoolean(1);
-		} catch (SQLException e) {
-			throw new DataStoreException(e);
-		}
-	}
-
-	/**
-	 * Check if the expression already has any parent or child set.
-	 * 
-	 * @param id
-	 *            The expression's id to check the existence of any parent or
-	 *            child for.
-	 * @return If the expression already has any parent or child set or not.
-	 * 
-	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.
-	 */
-	private boolean isRelativeSet(ExpressionId id) throws DataStoreException {
-		try {
-			isRelativeSetPs.setLong(1, id.getId());
-			isRelativeSetPs.setLong(2, id.getId());
-			ResultSet isRelativeSetRs = isRelativeSetPs.executeQuery();
-			isRelativeSetRs.next();
-			return isRelativeSetRs.getBoolean(1);
-		} catch (SQLException e) {
-			throw new DataStoreException(e);
-		}
-	}
-
-	/**
-	 * 
-	 * Look up relatives from the dbms using <code>PreparedStatement</code> .
-	 * 
-	 * @param getWithoutTimePs
-	 *            The <code>PreparedStatement</code> to use if no time is given.
-	 * @param getWithTimePs
-	 *            The <code>PreparedStatement</code> to use if a time is given.
-	 * @param id
-	 *            The expression id to look up the relatives to.
-	 * @param time
-	 *            The given time.
-	 * @return The expression ids of the relatives.
-	 * @throws NonExistingIdException
-	 *             The expression id do not exists in the dbms.
-	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.
-	 */
-	private HashSet<ExpressionId> getRelative(
-			PreparedStatement getWithoutTimePs,
-			PreparedStatement getWithTimePs, ExpressionId id, Date time)
-			throws NonExistingIdException, DataStoreException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
-		final HashSet<ExpressionId> result = new HashSet<ExpressionId>();
-		try {
-			// Check if the id exists in the dbms.
-			if (!isExistingId(id, time)) {
-				throw new NonExistingIdException("The specified id "
-						+ id.getId() + " do not exists in the data store.");
-			}
-			final ResultSet rs;
-			// Look up the relatives if no time is given.
-			if (sqlTimestamp == null) {
-				getWithoutTimePs.setLong(1, id.getId());
-				rs = getWithoutTimePs.executeQuery();
-				// Look up the relatives if a time is given.
-			} else {
-				getWithTimePs.setLong(1, id.getId());
-				getWithTimePs.setTimestamp(2, sqlTimestamp);
-				getWithTimePs.setTimestamp(3, sqlTimestamp);
-				getWithTimePs.setTimestamp(4, sqlTimestamp);
-				getWithTimePs.setTimestamp(5, sqlTimestamp);
-				getWithTimePs.setTimestamp(6, sqlTimestamp);
-				getWithTimePs.setTimestamp(7, sqlTimestamp);
-				rs = getWithTimePs.executeQuery();
-			}
-			// Store the result.
-			while (rs.next()) {
-				result.add(new ExpressionId(rs.getLong(1)));
-			}
-		} catch (SQLException e) {
-			throw new DataStoreException(e);
-		}
-		return result;
-	}
-
-	/**
-	 * Check if an id exist as an id for a concept or expression or both
-	 * depending on the used <code>PreparedStatement</code>.
+	 * Check if an id exist as an id for a concept or expression or both depending on the used
+	 * <code>PreparedStatement</code>.
 	 * 
 	 * @param id
 	 *            The id to check the existence for.
-	 * @param time
-	 *            The specific time. A <code>null</code> value is handled as the
-	 *            current time.
-	 * @param isWithoutTimePs
-	 *            The <code>PreparedStatement</code> to use if no time is given.
-	 * @param isWithTimePs
-	 *            The <code>PreparedStatement</code> to use if a time is given.
-	 * 
+	 * @param sqlTimestamp
+	 *            The specific time. A <code>null</code> value is handled as an error.
+	 * @param isPs
+	 *            The <code>PreparedStatement</code> to use .
 	 * @return If the id exist or not.
 	 * @throws DataStoreException
-	 *             Thrown if there are any problem with the data store.F
+	 *             Thrown if there are any problem with the data store.
 	 */
-	private boolean isExiId(ExpressionId id, Date time,
-			PreparedStatement isWithoutTimePs, PreparedStatement isWithTimePs)
+	private boolean isExiId(final ExpressionId id, final Timestamp sqlTimestamp, final PreparedStatement isPs)
 			throws DataStoreException {
-		final Timestamp sqlTimestamp = (time != null ? new Timestamp(
-				time.getTime()) : null);
 		final boolean result;
 		try {
 			final ResultSet isExistingIdRs;
-			// Look up if an id exists when no time is given.
-			if (sqlTimestamp == null) {
-				isWithoutTimePs.setLong(1, id.getId());
-				isExistingIdRs = isWithoutTimePs.executeQuery();
-			} else {
-				// Look up if an id exists when a time is given.
-				isWithTimePs.setLong(1, id.getId());
-				isWithTimePs.setTimestamp(2, sqlTimestamp);
-				isWithTimePs.setTimestamp(3, sqlTimestamp);
-				isExistingIdRs = isWithTimePs.executeQuery();
-			}
+			isPs.setLong(1, id.getId());
+			isPs.setTimestamp(2, sqlTimestamp);
+			isPs.setTimestamp(3, sqlTimestamp);
+			isExistingIdRs = isPs.executeQuery();
 			isExistingIdRs.next();
 			result = isExistingIdRs.getBoolean("exist");
 		} catch (SQLException e) {
@@ -1133,4 +1139,207 @@ public class DataStore implements
 		return result;
 	}
 
+	/**
+	 * Check if an equivalence with a future start already has been set for the expression.
+	 * 
+	 * @param id
+	 *            The expression's id to check for if an equivalence with a future start already has been set.
+	 * @param sqlTimestamp
+	 *            The specific time to do the check. A <code>null</code> value is handled as an error.
+	 * @return If the expression already has an equivalence set in the future or not.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	private boolean isFutureEquivalentSet(final ExpressionId id, final Timestamp sqlTimestamp)
+			throws DataStoreException {
+		final boolean result;
+		try {
+			isFutureEquivalentSetPs.setLong(1, id.getId());
+			isFutureEquivalentSetPs.setTimestamp(2, sqlTimestamp);
+			ResultSet isFutureRelativeSetRs = isFutureEquivalentSetPs.executeQuery();
+			isFutureRelativeSetRs.next();
+			result = isFutureRelativeSetRs.getBoolean("exist");
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	/**
+	 * Check if parent(s) and/or child(ren) with a future start already has been set for the expression.
+	 * 
+	 * @param id
+	 *            The expression's id to check for if parent(s) and/or child(ren) with a future start already has been
+	 *            set.
+	 * @param sqlTimestamp
+	 *            The specific time to do the check. A <code>null</code> value is handled as an error.
+	 * @return If the expression already has parent(s) and/or child(ren) set in the future or not.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	private boolean isFutureRelativeSet(ExpressionId id, final Timestamp sqlTimestamp) throws DataStoreException {
+		final boolean result;
+		try {
+			isFutureRelativeSetPs.setLong(1, id.getId());
+			isFutureRelativeSetPs.setLong(2, id.getId());
+			isFutureRelativeSetPs.setTimestamp(3, sqlTimestamp);
+			ResultSet isFutureRelativeSetRs = isFutureRelativeSetPs.executeQuery();
+			isFutureRelativeSetRs.next();
+			result = isFutureRelativeSetRs.getBoolean("exist");
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	/**
+	 * Inactivate an expression's definition from the data store.
+	 * 
+	 * @param id
+	 *            The expression's id to inactivate the definition for.
+	 * @param time
+	 *            The time the expression's definition was inactivated.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 */
+	private void inactivateExpressionDefinition(final ExpressionId id, final Timestamp sqlTimestamp)
+			throws DataStoreException {
+		try {
+			// Create new relationships for the concepts in an equivalence group if the current relationships for the
+			// concepts with the relationships in the group is going to be inactivated.
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setTimestamp(1, sqlTimestamp);
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setLong(2, id.getId());
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setTimestamp(3, sqlTimestamp);
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setTimestamp(4, sqlTimestamp);
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setTimestamp(5, sqlTimestamp);
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.setTimestamp(6, sqlTimestamp);
+			inactivateRelativesCreateNewRelationshipsForEquivalencePs.executeUpdate();
+
+			// Create new direct relationships between the parent(s) and child(ren) of the concept which is going to be
+			// retired.
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(1, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setLong(2, id.getId());
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(3, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(4, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(5, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(6, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setLong(7, id.getId());
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(8, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.setTimestamp(9, sqlTimestamp);
+			inactivateRelativesCreateNewDirectRelationshipsPs.executeUpdate();
+
+			// Set the end time to the relationships that is going to be retired.
+			inactivateRelativesSetEndtimePs.setTimestamp(1, sqlTimestamp);
+			inactivateRelativesSetEndtimePs.setLong(2, id.getId());
+			inactivateRelativesSetEndtimePs.setLong(3, id.getId());
+			inactivateRelativesSetEndtimePs.setTimestamp(4, sqlTimestamp);
+			inactivateRelativesSetEndtimePs.setTimestamp(5, sqlTimestamp);
+			inactivateRelativesSetEndtimePs.executeUpdate();
+
+			// Delete relationships with the same starttime as the time the retirement is done.
+			inactivateRelativesDeleteWithCurrentStartTimePs.setTimestamp(1, sqlTimestamp);
+			inactivateRelativesDeleteWithCurrentStartTimePs.setLong(2, id.getId());
+			inactivateRelativesDeleteWithCurrentStartTimePs.setLong(3, id.getId());
+			inactivateRelativesDeleteWithCurrentStartTimePs.executeUpdate();
+
+			// Set the end time to the second last expression equivalence in the group.
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(1, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(2, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(3, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setLong(4, id.getId());
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(5, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(6, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setLong(7, id.getId());
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(8, sqlTimestamp);
+			inactivateEquivalenceGroupSetEndtimePs.setTimestamp(9, sqlTimestamp);
+			inactivateRelativesDeleteWithCurrentStartTimePs.executeUpdate();
+
+			// Delete the second last expression equivalence in the group.
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setTimestamp(1, sqlTimestamp);
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setLong(2, id.getId());
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setTimestamp(3, sqlTimestamp);
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setTimestamp(4, sqlTimestamp);
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setLong(5, id.getId());
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setTimestamp(6, sqlTimestamp);
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.setTimestamp(7, sqlTimestamp);
+			inactivateEquivalenceGroupDeleteWithCurrentStartTimePs.executeUpdate();
+
+			// Set the end time to the expression equivalence that is going to be retired.
+			inactivateEquivalenceSetEndtimePs.setTimestamp(1, sqlTimestamp);
+			inactivateEquivalenceSetEndtimePs.setLong(2, id.getId());
+			inactivateEquivalenceSetEndtimePs.setTimestamp(3, sqlTimestamp);
+			inactivateEquivalenceSetEndtimePs.setTimestamp(4, sqlTimestamp);
+			inactivateEquivalenceSetEndtimePs.executeUpdate();
+
+			// Delete expression equivalence with the same starttime as the time the retirement is done.
+			inactivateEquivalenceDeleteWithCurrentStartTimePs.setTimestamp(1, sqlTimestamp);
+			inactivateEquivalenceDeleteWithCurrentStartTimePs.setLong(2, id.getId());
+			inactivateEquivalenceDeleteWithCurrentStartTimePs.executeUpdate();
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+	}
+
+	/**
+	 * 
+	 * Look up relatives at a specific time from the data store using a <code>PreparedStatement</code>.
+	 * 
+	 * @param id
+	 *            The expression id to look up the relatives to.
+	 * @param time
+	 *            The specific time. A <code>null</code> value is handled as the current time.
+	 * @param getRelativePs
+	 *            The <code>PreparedStatement</code> to use for finding the relatives.
+	 * @return The relatives' expression ids.
+	 * @throws DataStoreException
+	 *             Thrown if there are any problem with the data store.
+	 * @throws NonExistingIdException
+	 *             Thrown if the expression id does not exist in the data store.
+	 */
+	private HashSet<ExpressionId> getRelative(ExpressionId id, Date time, PreparedStatement getRelativePs)
+			throws DataStoreException, NonExistingIdException {
+		final Timestamp sqlTimestamp = convertOrSetCurrentTimestampToSQLTimestamp(time);
+		final HashSet<ExpressionId> result = new HashSet<ExpressionId>();
+		try {
+			// Check if the id exists in the dbms.
+			if (!isExistingId(id, sqlTimestamp)) {
+				throw new NonExistingIdException("The id " + id.getId().toString()
+						+ " do not exists in the data store at the time " + sqlTimestamp.toString() + ".");
+			}
+			final ResultSet getRelativeRs;
+			// Look up the relatives in the dbms.
+			getRelativePs.setLong(1, id.getId());
+			getRelativePs.setTimestamp(2, sqlTimestamp);
+			getRelativePs.setTimestamp(3, sqlTimestamp);
+			getRelativePs.setTimestamp(4, sqlTimestamp);
+			getRelativePs.setTimestamp(5, sqlTimestamp);
+			getRelativePs.setTimestamp(6, sqlTimestamp);
+			getRelativePs.setTimestamp(7, sqlTimestamp);
+			getRelativeRs = getRelativePs.executeQuery();
+			// Store the result.
+			while (getRelativeRs.next()) {
+				result.add(new ExpressionId(getRelativeRs.getLong("id")));
+			}
+		} catch (SQLException e) {
+			throw new DataStoreException(e);
+		}
+		return result;
+	}
+
+	/**
+	 * Convert a <code>Date</code> or take the current time and insert it into a SQL <code>Timestamp</code>.
+	 * <p>
+	 * If the <code>time</code> parameter is not <code>null</code>, then the method returns the <code>time</code>
+	 * parameter as a SQL <code>Timestamp</code>.
+	 * <p>
+	 * If the <code>time</code> parameter is <code>null</code>, then the method returns the current time as a SQL
+	 * <code>Timestamp</code>.
+	 * 
+	 * @param time
+	 *            The <code>time</code> to convert or <code><null</code> for the current time.
+	 * @return The resulting time as a SQL <code>Timestamp</code>.
+	 */
+	private Timestamp convertOrSetCurrentTimestampToSQLTimestamp(final Date time) {
+		return (time != null ? new Timestamp(time.getTime()) : new Timestamp(java.lang.System.currentTimeMillis()));
+	}
 }

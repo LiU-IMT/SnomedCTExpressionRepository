@@ -6,20 +6,13 @@ package se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import org.apache.commons.configuration.Configuration;
-import org.apache.commons.configuration.XMLConfiguration;
-import org.apache.log4j.Logger;
-
-import se.liu.imt.mi.snomedct.expressionrepository.ExpressionRepositoryImpl;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 
 /**
- * An implementation of the <code>DataStore</code> interface for the PostgreSQL
- * database management system including service methods.
+ * An implementation of the <code>DataStore</code> interface for the PostgreSQL database management system including
+ * service methods.
  * 
  * @author Mikael Nyström, mikael.nystrom@liu.se
  * 
@@ -27,64 +20,41 @@ import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 public class DataStoreService extends DataStore {
 
 	/**
-	 * Logger
+	 * A <code>PreparedStatement</code> that restore the equivalents table in the dbms to a previous state by removing
+	 * rows that have been inserted after a specific timestamp.
 	 */
-	private static final Logger log = Logger
-			.getLogger(ExpressionRepositoryImpl.class);
+	private final PreparedStatement restoreEquivalentsDelete;
+	/**
+	 * A <code>PreparedStatement</code> that restore the expressions table in the dbms to a previous state by removing
+	 * end times that have been inserted after a specific timestamp.
+	 */
+	private final PreparedStatement restoreEquivalentsEndTime;
 
 	/**
-	 * Utility to restore expression repository database back to a certain date
-	 * 
-	 * @param args
-	 *            The arguments are never used.
-	 * @throws Exception
-	 *             If something goes wrong.
+	 * A <code>PreparedStatement</code> that restore the expressions table in the dbms to a previous state by removing
+	 * rows that have been inserted after a specific timestamp.
 	 */
-	public static void main(String[] args) throws Exception {
-		// initialize configuration
-		Configuration config = null;
-		config = new XMLConfiguration("config.xml");
-
-		String url = config.getString("database.url");
-		String username = config.getString("database.username");
-		String password = config.getString("database.password");
-
-		String date = "2012-08-01";
-
-		DataStoreService dss = new DataStoreService(url, username, password);
-		DateFormat formatter = new SimpleDateFormat("YY-MM-DD");
-		log.debug("Connected to database server");
-		dss.restoreDataStore(formatter.parse(date));
-		log.debug("Restored to " + date);
-	}
+	private final PreparedStatement restoreExpressionsDelete;
+	/**
+	 * A <code>PreparedStatement</code> that restore the equivalents table in the dbms to a previous state by removing
+	 * end times that have been inserted after a specific timestamp.
+	 */
+	private final PreparedStatement restoreExpressionsEndTime;
 
 	/**
-	 * A <code>PreparedStatement</code> restore the dbms to a previous state by
-	 * removing rows in the expressions table.
+	 * A <code>PreparedStatement</code> that restore the transitiveclosure table in the dbms to a previous state by
+	 * removing rows that have been inserted after a specific timestamp.
 	 */
-	private final PreparedStatement restoreDataStoreExpressionsDelete;
+	private final PreparedStatement restoreTransitiveclosureDelete;
+	/**
+	 * A <code>PreparedStatement</code> that restore the transitiveclosure table in the dbms to a previous state by
+	 * removing end times that have been inserted after a specific timestamp.
+	 */
+	private final PreparedStatement restoreTransitiveclosureEndTime;
 
 	/**
-	 * A <code>PreparedStatement</code> restore the dbms to a previous state by
-	 * updating rows in the expressions table.
-	 */
-	private final PreparedStatement restoreDataStoreExpressionsUpdate;
-
-	/**
-	 * A <code>PreparedStatement</code> restore the dbms to a previous state by
-	 * removing rows in the transitiveclosure table.
-	 */
-	private final PreparedStatement restoreDataStoreTransitiveclosureDelete;
-
-	/**
-	 * A <code>PreparedStatement</code> restore the dbms to a previous state by
-	 * updating rows in the transitiveclosure table.
-	 */
-	private final PreparedStatement restoreDataStoreTransitiveclosureUpdate;
-
-	/**
-	 * Creates a data store API and set up a connection to the PostgreSQL
-	 * database management system containing the expression database.
+	 * Creates a data store API and set up a connection to the PostgreSQL database management system containing the
+	 * expression database.
 	 * 
 	 * @param url
 	 *            The URL for the database connection.
@@ -93,21 +63,24 @@ public class DataStoreService extends DataStore {
 	 * @param password
 	 *            The user password for the database connection.
 	 * @throws DataStoreException
-	 *             Thrown if there is a problem with the dbms or the connection
-	 *             to the dbms.
+	 *             Thrown if there is a problem with the dbms or the connection to the dbms.
 	 */
-	public DataStoreService(String url, String userName, String password)
-			throws DataStoreException {
+	public DataStoreService(String url, String userName, String password) throws DataStoreException {
 		super(url, userName, password);
 		try {
-			restoreDataStoreExpressionsDelete = super.con
-					.prepareStatement("DELETE FROM expressions WHERE starttime > ?;");
-			restoreDataStoreExpressionsUpdate = super.con
-					.prepareStatement("UPDATE expressions SET endtime = NULL WHERE endtime > ?;");
-			restoreDataStoreTransitiveclosureDelete = super.con
+			restoreEquivalentsDelete = super.con.prepareStatement("DELETE FROM equivalents WHERE starttime > ?;");
+			restoreEquivalentsEndTime = super.con.prepareStatement(
+					"UPDATE equivalents SET endtime = 'infinity' WHERE ? < endtime AND endtime < 'infinity';");
+
+			restoreExpressionsDelete = super.con.prepareStatement("DELETE FROM expressions WHERE starttime > ?;");
+			restoreExpressionsEndTime = super.con.prepareStatement(
+					"UPDATE expressions SET endtime = 'infinity' WHERE ? < endtime AND endtime < 'infinity';");
+
+			restoreTransitiveclosureDelete = super.con
 					.prepareStatement("DELETE FROM transitiveclosure WHERE starttime > ?;");
-			restoreDataStoreTransitiveclosureUpdate = super.con
-					.prepareStatement("UPDATE transitiveclosure SET endtime = NULL WHERE endtime > ?;");
+			restoreTransitiveclosureEndTime = super.con.prepareStatement(
+					"UPDATE transitiveclosure SET endtime = 'infinity' WHERE ? < endtime AND endtime < 'infinity';");
+
 		} catch (SQLException e) {
 			throw new DataStoreException(e);
 		}
@@ -123,26 +96,26 @@ public class DataStoreService extends DataStore {
 	 * @throws NullPointerException
 	 *             Thrown if no time to restore t is given.
 	 */
-	public void restoreDataStore(final Date time) throws DataStoreException,
-			NullPointerException {
+	public void restoreDataStore(final Date time) throws DataStoreException, NullPointerException {
 		if (time == null) {
-			throw new NullPointerException(
-					"The time to restore the data store to must be given.");
+			throw new NullPointerException("The time to restore the data store to must be given.");
 		}
 		final Timestamp sqlTimestamp = new Timestamp(time.getTime());
 
 		try {
 			super.con.setAutoCommit(false);
-			restoreDataStoreExpressionsDelete.setTimestamp(1, sqlTimestamp);
-			restoreDataStoreExpressionsDelete.executeUpdate();
-			restoreDataStoreExpressionsUpdate.setTimestamp(1, sqlTimestamp);
-			restoreDataStoreExpressionsUpdate.executeUpdate();
-			restoreDataStoreTransitiveclosureDelete.setTimestamp(1,
-					sqlTimestamp);
-			restoreDataStoreTransitiveclosureDelete.executeUpdate();
-			restoreDataStoreTransitiveclosureUpdate.setTimestamp(1,
-					sqlTimestamp);
-			restoreDataStoreTransitiveclosureUpdate.executeUpdate();
+			restoreEquivalentsDelete.setTimestamp(1, sqlTimestamp);
+			restoreEquivalentsDelete.executeUpdate();
+			restoreEquivalentsEndTime.setTimestamp(1, sqlTimestamp);
+			restoreEquivalentsEndTime.executeUpdate();
+			restoreExpressionsDelete.setTimestamp(1, sqlTimestamp);
+			restoreExpressionsDelete.executeUpdate();
+			restoreExpressionsEndTime.setTimestamp(1, sqlTimestamp);
+			restoreExpressionsEndTime.executeUpdate();
+			restoreTransitiveclosureDelete.setTimestamp(1, sqlTimestamp);
+			restoreTransitiveclosureDelete.executeUpdate();
+			restoreTransitiveclosureEndTime.setTimestamp(1, sqlTimestamp);
+			restoreTransitiveclosureEndTime.executeUpdate();
 			super.con.commit();
 			super.con.setAutoCommit(true);
 		} catch (SQLException e) {
@@ -153,9 +126,7 @@ public class DataStoreService extends DataStore {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see
-	 * se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql.DataStore
-	 * #finalize()
+	 * @see se.liu.imt.mi.snomedct.expressionrepository.datastore.postgresql. DataStore #finalize()
 	 */
 	@Override
 	public void finalize() throws Throwable {
