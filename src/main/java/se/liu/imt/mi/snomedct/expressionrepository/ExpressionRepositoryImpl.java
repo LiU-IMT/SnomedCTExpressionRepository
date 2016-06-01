@@ -5,12 +5,10 @@ package se.liu.imt.mi.snomedct.expressionrepository;
 
 import java.io.StringWriter;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashSet;
 
-import org.antlr.runtime.ANTLRStringStream;
-import org.antlr.runtime.CharStream;
-import org.antlr.runtime.CommonTokenStream;
-import org.antlr.runtime.tree.Tree;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.lang.NotImplementedException;
@@ -36,18 +34,15 @@ import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 //import au.csiro.snorocket.core.Snorocket;
 //import au.csiro.snorocket.owlapi3.SnorocketReasoner;
 
-import se.liu.imt.mi.snomedct.expression.SCTExpressionLexer;
-import se.liu.imt.mi.snomedct.expression.SCTExpressionParser;
+import se.liu.imt.mi.snomedct.expression.tools.SNOMEDCTParserUtil;
 import se.liu.imt.mi.snomedct.expression.tools.ExpressionSyntaxError;
-import se.liu.imt.mi.snomedct.expression.tools.SCTOWLExpressionBuilder;
-import se.liu.imt.mi.snomedct.expression.tools.SCTSortedExpressionBuilder;
-import se.liu.imt.mi.snomedct.expression.tools.SnomedCTParser;
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionRepository;
 import se.liu.imt.mi.snomedct.expressionrepository.api.NonExistingIdException;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStore;
 import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.Expression;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
+import se.liu.imt.mi.snomedct.parser.SortedExpressionVisitor;
 import uk.ac.manchester.cs.owl.owlapi.mansyntaxrenderer.ManchesterOWLSyntaxObjectRenderer;
 import uk.ac.manchester.cs.owl.owlapi.mansyntaxrenderer.ManchesterOWLSyntaxPrefixNameShortFormProvider;
 import uk.ac.manchester.cs.owlapi.dlsyntax.DLSyntaxOntologyFormat;
@@ -64,7 +59,6 @@ public class ExpressionRepositoryImpl extends Object implements
 	private OWLOntologyManager manager;
 	private OWLReasoner reasoner;
 	private DataStore dataStore;
-	private SCTOWLExpressionBuilder owlExpressionBuilder;
 
 	private static final Logger log = Logger
 			.getLogger(ExpressionRepositoryImpl.class);
@@ -119,8 +113,6 @@ public class ExpressionRepositoryImpl extends Object implements
 			OWLReasonerFactory reasonerFactory = new ElkReasonerFactory();
 			reasoner = reasonerFactory.createReasoner(ontology);
 
-			owlExpressionBuilder = new SCTOWLExpressionBuilder(ontology,
-					dataFactory);
 		} catch (OWLOntologyCreationException e) {
 			log.debug("Exception", e);
 			throw e;
@@ -129,11 +121,12 @@ public class ExpressionRepositoryImpl extends Object implements
 		// add all existing expressions from expression table to ontology
 		try {
 			log.debug("Adding existing expressions from data store to ontology");
-			Collection<Expression> expressions = dataStore.getAllExpressions(null);
+			Collection<Expression> expressions = dataStore
+					.getAllExpressions(null);
 			for (Expression ex : expressions) {
-				Tree result = SnomedCTParser
-						.parseExpression(ex.getExpression());
-				addExpressionToOntology(result, ex.getExpressionId());
+				SNOMEDCTParserUtil.parseExpressionToOWLAxiom(
+						ex.getExpression(), ontology);
+				// addExpressionToOntology(result, ex.getExpressionId());
 			}
 		} catch (Exception e) {
 			log.debug("Exception", e);
@@ -142,15 +135,18 @@ public class ExpressionRepositoryImpl extends Object implements
 
 		// classify ontology
 		log.debug("Starting classification of ontology");
-		reasoner.precomputeInferences(org.semanticweb.owlapi.reasoner.InferenceType.CLASS_HIERARCHY);
+		reasoner.precomputeInferences();//org.semanticweb.owlapi.reasoner.InferenceType.CLASS_HIERARCHY);
 		log.debug("Finished classifying ontology");
+		
+		log.debug("No. of axioms = " + ontology.getAxiomCount());
 
 	}
 
-	private ExpressionId getExpressionID(Tree ast) {
+	private ExpressionId getExpressionID(ParseTree tree) {
 		// generate sorted expression string
-		String sortedExpression = SCTSortedExpressionBuilder
-				.buildSortedExpression(ast);
+		SortedExpressionVisitor sortVisitor = new SortedExpressionVisitor();
+		String sortedExpression = sortVisitor.visit(tree);
+
 		log.debug("sorted expression = " + sortedExpression);
 
 		// use try block to implement transaction??
@@ -173,7 +169,7 @@ public class ExpressionRepositoryImpl extends Object implements
 				expid = dataStore.getExpressionId(sortedExpression, null);
 
 			// TODO: If the expression is a single number but not an expression
-			// ID or SCTID, need for a new data store method?
+			// ID or SCTID, then an error whould be thrown...
 
 			if (expid != null) {// the expression is currently in the
 								// expression repository
@@ -187,7 +183,14 @@ public class ExpressionRepositoryImpl extends Object implements
 
 			// generate OWL expression and create new class for the expression
 			// add axiom to ontology and classify
-			OWLClass new_pc_concept = addExpressionToOntology(ast, expid);
+			OWLClass new_pc_concept = manager.getOWLDataFactory().getOWLClass(
+					IRI.create(SNOMEDCTParserUtil.PC_IRI + expid.toString()));
+
+			SNOMEDCTParserUtil.parseExpressionToOWLAxiom(tree, ontology,
+					new_pc_concept, false);
+			
+			reasoner.flush();
+			reasoner.precomputeInferences();
 
 			// check for equivalent classes
 			Node<OWLClass> equivalentClasses = reasoner
@@ -210,7 +213,7 @@ public class ExpressionRepositoryImpl extends Object implements
 				// if there is at least one equivalent expression or
 				// pre-coordinated
 				// concept then store the equivalence in the repository
-				dataStore.storeExpressionEquivalence(expid, eqExpid);
+				dataStore.storeExpressionEquivalence(expid, eqExpid, null);
 			else {
 				// if there are no equivalent expressions or pre-cordinated
 				// concepts, add direct super- and sub classes to the data store
@@ -247,7 +250,7 @@ public class ExpressionRepositoryImpl extends Object implements
 					}
 				}
 				dataStore.storeExpressionParentsAndChildren(expid, parents,
-						children);
+						children, null);
 			}
 			// return newly generated ID
 			return expid;
@@ -274,7 +277,7 @@ public class ExpressionRepositoryImpl extends Object implements
 
 		log.debug("expression = " + expression);
 
-		Tree result = SnomedCTParser.parseExpression(expression);
+		ParseTree result = SNOMEDCTParserUtil.parseExpression(expression);
 
 		return getExpressionID(result);
 
@@ -356,38 +359,40 @@ public class ExpressionRepositoryImpl extends Object implements
 		log.debug("OWLClass = " + name);
 		Long id = (long) 0;
 		try {
-			id = new Long(name.substring(name.lastIndexOf('_') + 1));
+			id = new Long(name.substring(name.lastIndexOf('/') + 1));
 		} catch (Exception e) {
 			;
 		}
 		return id;
 	}
 
-	private OWLClass addExpressionToOntology(Tree parseTree, ExpressionId expid)
-			throws Exception {
-
-		log.debug("expression id = " + expid.toString());
-
-		// create OWL expression from parse tree
-		OWLClassExpression owlExpression = owlExpressionBuilder
-				.translateToOWL(parseTree);
-
-		// create new class for the expression
-		OWLClass new_pc_concept = dataFactory
-				.getOWLClass(IRI
-						.create(se.liu.imt.mi.snomedct.expression.tools.SCTOWLExpressionBuilder.PC_IRI
-								+ expid.toString()));
-
-		// add equivalence axom to ontology
-		manager.addAxiom(ontology, dataFactory.getOWLEquivalentClassesAxiom(
-				new_pc_concept, owlExpression));
-
-		// classify ontology
-		reasoner.flush();
-		reasoner.precomputeInferences();
-
-		return new_pc_concept;
-	}
+	// probably not needed anymore...
+	// private OWLClass addExpressionToOntology(Tree parseTree, ExpressionId
+	// expid)
+	// throws Exception {
+	//
+	// log.debug("expression id = " + expid.toString());
+	//
+	// // create OWL expression from parse tree
+	// OWLClassExpression owlExpression = owlExpressionBuilder
+	// .translateToOWL(parseTree);
+	//
+	// // create new class for the expression
+	// OWLClass new_pc_concept = dataFactory
+	// .getOWLClass(IRI
+	// .create(se.liu.imt.mi.snomedct.expression.tools.SCTOWLExpressionBuilder.PC_IRI
+	// + expid.toString()));
+	//
+	// // add equivalence axom to ontology
+	// manager.addAxiom(ontology, dataFactory.getOWLEquivalentClassesAxiom(
+	// new_pc_concept, owlExpression));
+	//
+	// // classify ontology
+	// reasoner.flush();
+	// reasoner.precomputeInferences();
+	//
+	// return new_pc_concept;
+	// }
 
 	private String printOWLExpression(OWLClassExpression e) {
 		StringWriter sw = new StringWriter();
@@ -405,63 +410,58 @@ public class ExpressionRepositoryImpl extends Object implements
 	public Collection<ExpressionId> getSCTQueryResult(String queryExpression)
 			throws Exception {
 
-		log.debug("Received query: " + queryExpression);
+		/*
+		 * log.debug("Received query: " + queryExpression);
+		 * 
+		 * SCTExpressionParser.query_return parseResult = null;
+		 * 
+		 * // parse string and throw ExpressionSyntaxError if unparsable
+		 * CharStream input = new ANTLRStringStream(queryExpression);
+		 * SCTExpressionLexer lexer = new SCTExpressionLexer(input);
+		 * CommonTokenStream tokens = new CommonTokenStream(lexer);
+		 * SCTExpressionParser parser = new SCTExpressionParser(tokens); try {
+		 * parseResult = parser.query(); // Note difference in starting point //
+		 * for parser as compared to parsing // for SCT expressions } catch
+		 * (Exception e) { throw new ExpressionSyntaxError(e); } if (parseResult
+		 * == null) throw new ExpressionSyntaxError(
+		 * "Parse result is null. Should not happen ever!");
+		 * 
+		 * return processQuery((Tree) parseResult.getTree());
+		 */
 
-		SCTExpressionParser.query_return parseResult = null;
-
-		// parse string and throw ExpressionSyntaxError if unparsable
-		CharStream input = new ANTLRStringStream(queryExpression);
-		SCTExpressionLexer lexer = new SCTExpressionLexer(input);
-		CommonTokenStream tokens = new CommonTokenStream(lexer);
-		SCTExpressionParser parser = new SCTExpressionParser(tokens);
-		try {
-			parseResult = parser.query(); // Note difference in starting point
-											// for parser as compared to parsing
-											// for SCT expressions
-		} catch (Exception e) {
-			throw new ExpressionSyntaxError(e);
-		}
-		if (parseResult == null)
-			throw new ExpressionSyntaxError(
-					"Parse result is null. Should not happen ever!");
-
-		return processQuery((Tree) parseResult.getTree());
-	}
-
-	private Collection<ExpressionId> processQuery(Tree ast) throws Exception {
-		if (ast != null) {
-			switch (ast.getType()) {
-			case se.liu.imt.mi.snomedct.expression.SCTExpressionParser.DESC_SELF:
-			case se.liu.imt.mi.snomedct.expression.SCTExpressionParser.DESC: {
-				if (ast.getChildCount() != 1
-						|| ast.getChild(0).getType() != se.liu.imt.mi.snomedct.expression.SCTExpressionParser.TOP_AND)
-					throw new ExpressionSyntaxError(
-							"Descendant may only take an SCT expression as argument, not a query expression");
-				ExpressionId expid = getExpressionID(ast.getChild(0));
-				return getDecendants(expid);
-			}
-			case se.liu.imt.mi.snomedct.expression.SCTExpressionParser.UNION: {
-				Collection<ExpressionId> set = new HashSet<ExpressionId>();
-				for (int i = 0; i < ast.getChildCount(); i++) {
-					set.addAll(processQuery(ast.getChild(i)));
-				}
-				return set;
-			}
-			case se.liu.imt.mi.snomedct.expression.SCTExpressionParser.TOP_AND: {
-				Collection<ExpressionId> c = new HashSet<ExpressionId>();
-				c.add(getExpressionID(ast));
-				return c;
-			}
-			default:
-				throw new Exception("Undetermined AST node type: "
-						+ ast.getType());
-
-			}
-		}
 		return null;
 	}
 
+	/*
+	 * private Collection<ExpressionId> processQuery(Tree ast) throws Exception
+	 * { if (ast != null) { switch (ast.getType()) { case
+	 * se.liu.imt.mi.snomedct.expression.SCTExpressionParser.DESC_SELF: case
+	 * se.liu.imt.mi.snomedct.expression.SCTExpressionParser.DESC: { if
+	 * (ast.getChildCount() != 1 || ast.getChild(0).getType() !=
+	 * se.liu.imt.mi.snomedct.expression.SCTExpressionParser.TOP_AND) throw new
+	 * ExpressionSyntaxError(
+	 * "Descendant may only take an SCT expression as argument, not a query expression"
+	 * ); ExpressionId expid = getExpressionID(ast.getChild(0)); return
+	 * getDecendants(expid); } case
+	 * se.liu.imt.mi.snomedct.expression.SCTExpressionParser.UNION: {
+	 * Collection<ExpressionId> set = new HashSet<ExpressionId>(); for (int i =
+	 * 0; i < ast.getChildCount(); i++) {
+	 * set.addAll(processQuery(ast.getChild(i))); } return set; } case
+	 * se.liu.imt.mi.snomedct.expression.SCTExpressionParser.TOP_AND: {
+	 * Collection<ExpressionId> c = new HashSet<ExpressionId>();
+	 * c.add(getExpressionID(ast)); return c; } default: throw new
+	 * Exception("Undetermined AST node type: " + ast.getType());
+	 * 
+	 * } } return null; }
+	 */
 	public OWLReasoner getReasoner() {
 		return reasoner;
+	}
+
+	@Override
+	public boolean isSubsumedNotEquivalent(ExpressionId id1, ExpressionId id2,
+			Date time) throws DataStoreException {
+		// TODO Auto-generated method stub
+		return false;
 	}
 }
