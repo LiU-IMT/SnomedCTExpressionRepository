@@ -83,17 +83,17 @@ public class TestExpressionReporitoryImpl {
 	}
 
 	@Test
-	public final void testGetExpression() throws ExpressionSyntaxError, NonExistingIdException {
-		// log.debug("testGetExpression()");
-		// ExpressionId id = repo
-		// .getExpressionID("125605004 | fracture of bone | : 363698007 | finding site | = 71341001 | bone structure of femur |");
-		// String expression = repo.getExpression(id);
-		// log.debug("expression = " + expression);
-		// assertTrue(expression.equals("125605004:363698007=71341001"));
+	public final void testGetExpression() throws ExpressionSyntaxError, NonExistingIdException, DataStoreException {
+		 log.debug("testGetExpression()");
+		 ExpressionId id = repo
+		 .getExpressionID("125605004 | fracture of bone | : 363698007 | finding site | = 71341001 | bone structure of femur |");
+		 String expression = repo.getExpression(id);
+		 log.debug("expression = " + expression);
+		 assertTrue(expression.equals("===125605004:363698007=71341001"));
 	}
 
 	@Test
-	public final void testGetDecendants() throws NonExistingIdException, DataStoreException {
+	public final void testGetDescendants() throws NonExistingIdException, DataStoreException {
 		log.debug("testGetDecendants()");
 		ExpressionId id = new ExpressionId((long) 5913000);
 		Collection<ExpressionId> result = repo.getDecendants(id);

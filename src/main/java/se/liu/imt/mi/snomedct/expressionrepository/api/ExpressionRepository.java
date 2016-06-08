@@ -50,8 +50,9 @@ public interface ExpressionRepository {
 	 *         expression.
 	 * @exception NonExistingIdException
 	 *                An id does not exist in the repository.
+	 * @throws DataStoreException 
 	 */
-	String getExpression(ExpressionId id) throws NonExistingIdException;
+	String getExpression(ExpressionId id) throws NonExistingIdException, DataStoreException;
 
 	/**
 	 * Returns results of the execution of a query given an
