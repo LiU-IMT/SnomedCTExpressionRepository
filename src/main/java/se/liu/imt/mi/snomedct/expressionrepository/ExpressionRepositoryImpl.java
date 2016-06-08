@@ -15,14 +15,15 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.log4j.Logger;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
+import org.semanticweb.owlapi.formats.DLSyntaxDocumentFormat;
 import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLClass;
 import org.semanticweb.owlapi.model.OWLClassExpression;
 import org.semanticweb.owlapi.model.OWLDataFactory;
+import org.semanticweb.owlapi.model.OWLDocumentFormat;
 import org.semanticweb.owlapi.model.OWLObjectIntersectionOf;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyCreationException;
-import org.semanticweb.owlapi.model.OWLOntologyFormat;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.reasoner.Node;
 import org.semanticweb.owlapi.reasoner.NodeSet;
@@ -34,6 +35,8 @@ import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
 //import au.csiro.snorocket.core.Snorocket;
 //import au.csiro.snorocket.owlapi3.SnorocketReasoner;
 
+
+
 import se.liu.imt.mi.snomedct.expression.tools.SNOMEDCTParserUtil;
 import se.liu.imt.mi.snomedct.expression.tools.ExpressionSyntaxError;
 import se.liu.imt.mi.snomedct.expressionrepository.api.ExpressionRepository;
@@ -43,9 +46,8 @@ import se.liu.imt.mi.snomedct.expressionrepository.datastore.DataStoreException;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.Expression;
 import se.liu.imt.mi.snomedct.expressionrepository.datatypes.ExpressionId;
 import se.liu.imt.mi.snomedct.parser.SortedExpressionVisitor;
-import uk.ac.manchester.cs.owl.owlapi.mansyntaxrenderer.ManchesterOWLSyntaxObjectRenderer;
-import uk.ac.manchester.cs.owl.owlapi.mansyntaxrenderer.ManchesterOWLSyntaxPrefixNameShortFormProvider;
-import uk.ac.manchester.cs.owlapi.dlsyntax.DLSyntaxOntologyFormat;
+import org.semanticweb.owlapi.manchestersyntax.renderer.ManchesterOWLSyntaxObjectRenderer;
+import org.semanticweb.owlapi.manchestersyntax.renderer.ManchesterOWLSyntaxPrefixNameShortFormProvider;
 
 /**
  * @author Daniel Karlsson, daniel.karlsson@liu.se
@@ -169,7 +171,7 @@ public class ExpressionRepositoryImpl extends Object implements
 				expid = dataStore.getExpressionId(sortedExpression, null);
 
 			// TODO: If the expression is a single number but not an expression
-			// ID or SCTID, then an error whould be thrown...
+			// ID or SCTID, then an error should be thrown...
 
 			if (expid != null) {// the expression is currently in the
 								// expression repository
@@ -396,7 +398,7 @@ public class ExpressionRepositoryImpl extends Object implements
 
 	private String printOWLExpression(OWLClassExpression e) {
 		StringWriter sw = new StringWriter();
-		OWLOntologyFormat of = new DLSyntaxOntologyFormat();
+		OWLDocumentFormat of = new DLSyntaxDocumentFormat();
 		ManchesterOWLSyntaxPrefixNameShortFormProvider ssfp = new ManchesterOWLSyntaxPrefixNameShortFormProvider(
 				of); // new SimpleShortFormProvider();
 		ManchesterOWLSyntaxObjectRenderer renderer = new ManchesterOWLSyntaxObjectRenderer(
